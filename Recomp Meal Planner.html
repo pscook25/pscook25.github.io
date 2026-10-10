@@ -1,0 +1,665 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Recomp Meal Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control column (targets, slots) beside a results column read top-down: verdict → nutrition panel → meals → suggestions → shopping. Stacks on phones. */
+:root {
+  --bg: #f3f5f4; --surface: #ffffff; --sunk: #e8ecea; --ink: #18201d; --muted: #5b6863; --line: #cdd5d1;
+  --accent: #24508f; --accent-ink: #ffffff; --accent-soft: #e2e9f5;
+  --ok: #2c7a4b; --ok-soft: #e0f0e6; --over: #b93a26; --over-soft: #f8e2dd; --under: #9a6510; --under-soft: #f6ecd8;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111614; --surface: #1a211e; --sunk: #232c28; --ink: #e7ecea; --muted: #9aa8a2; --line: #33403b;
+  --accent: #8fb0ea; --accent-ink: #0f1a2c; --accent-soft: #1f2c43;
+  --ok: #6cc893; --ok-soft: #173325; --over: #f08b76; --over-soft: #3d1f19; --under: #e3b25c; --under-soft: #3a2c12;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111614; --surface: #1a211e; --sunk: #232c28; --ink: #e7ecea; --muted: #9aa8a2; --line: #33403b;
+  --accent: #8fb0ea; --accent-ink: #0f1a2c; --accent-soft: #1f2c43;
+  --ok: #6cc893; --ok-soft: #173325; --over: #f08b76; --over-soft: #3d1f19; --under: #e3b25c; --under-soft: #3a2c12;
+  color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 18px 48px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+h1 { font-size: 2.1rem; line-height: 1; text-transform: uppercase; }
+h2 { font-size: 1.25rem; text-transform: uppercase; letter-spacing: .04em; }
+.num, input[type=number], .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 20px; padding-bottom: 14px; border-bottom: 3px solid var(--ink); margin-bottom: 18px; }
+.top p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
+.grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 18px; }
+.inputs { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 860px) { .inputs { position: static; } }
+.blk { display: grid; gap: 8px; }
+.lbl { font-size: .74rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+textarea, input, select, button { font: inherit; color: inherit; }
+textarea, input[type=number], select { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; min-width: 0; }
+textarea { resize: vertical; min-height: 58px; font-family: var(--mono); font-size: .88rem; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.field { display: grid; gap: 3px; }
+.field span { font-size: .8rem; color: var(--muted); }
+.field small { font-family: var(--mono); font-size: .72rem; color: var(--muted); min-height: 1em; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.small { padding: 4px 10px; font-size: .85rem; }
+.seg { display: inline-grid; grid-auto-flow: column; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 7px 16px; cursor: pointer; font-family: var(--mono); font-weight: 600; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed=true] { background: var(--ink); color: var(--bg); }
+.locks { display: grid; gap: 8px; }
+.lockrow { display: grid; grid-template-columns: 82px minmax(0, 1fr) 72px; gap: 6px; align-items: center; }
+.lockrow .slot { font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.lockrow select { padding: 6px 6px; font-size: .85rem; }
+.hint { font-size: .82rem; color: var(--muted); margin: 0; }
+.chip { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.results { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-width: 0; }
+.verdict { border-radius: var(--r); padding: 12px 16px; border: 1px solid; display: grid; gap: 4px; }
+.verdict b { font-family: var(--display); font-size: 1.2rem; text-transform: uppercase; letter-spacing: .03em; }
+.verdict ul { margin: 2px 0 0; padding-left: 18px; }
+.verdict.ok { background: var(--ok-soft); border-color: var(--ok); }
+.verdict.bad { background: var(--over-soft); border-color: var(--over); }
+.verdict.edit { background: var(--under-soft); border-color: var(--under); }
+.verdict .meta { font-size: .85rem; color: var(--muted); }
+/* Nutrition-information panel */
+.nip { background: var(--surface); border: 2px solid var(--ink); border-radius: 4px; padding: 10px 14px 12px; }
+.nip h2 { border-bottom: 8px solid var(--ink); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.nip h2 span { font-family: var(--body); font-size: .8rem; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); }
+.tblwrap { overflow-x: auto; }
+table.tot { width: 100%; border-collapse: collapse; font-size: .92rem; min-width: 440px; }
+table.tot th { text-align: right; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 6px; border-bottom: 1px solid var(--ink); font-weight: 700; }
+table.tot th:first-child, table.tot td:first-child { text-align: left; }
+table.tot td { padding: 7px 6px; border-bottom: 1px solid var(--line); text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.tot td:first-child { font-family: var(--body); font-weight: 700; }
+table.tot td.tl { color: var(--muted); font-size: .8rem; }
+table.tot tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; min-width: 64px; text-align: center; font-family: var(--body); font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.over { background: var(--over-soft); color: var(--over); } .pill.under { background: var(--under-soft); color: var(--under); } .pill.na { background: var(--sunk); color: var(--muted); }
+td.d.ok { color: var(--ok); } td.d.over { color: var(--over); } td.d.under { color: var(--under); }
+.sechead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.meals { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.meal { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.meal.locked { border-color: var(--accent); }
+.meal .eyebrow { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.meal .eyebrow span { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.meal h3 { font-size: 1.3rem; line-height: 1.1; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.stepper button { border: 0; background: var(--sunk); width: 30px; height: 30px; cursor: pointer; font-weight: 700; }
+.stepper button:disabled { opacity: .35; cursor: default; }
+.stepper output { min-width: 58px; text-align: center; font-family: var(--mono); font-weight: 600; }
+.macros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.macros div { display: grid; }
+.macros b { font-family: var(--mono); font-weight: 600; font-size: .95rem; }
+.macros small { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.meal .src { font-size: .76rem; color: var(--muted); overflow-wrap: anywhere; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: .8rem; font-weight: 600; }
+.sugs { display: grid; gap: 10px; }
+.sug { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.sug .rank { font-family: var(--display); font-size: 1.6rem; font-weight: 800; color: var(--accent); width: 1.2em; text-align: center; }
+.sug .txt { font-weight: 600; }
+.sug .eff { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.eff span { font-family: var(--mono); font-size: .78rem; background: var(--sunk); padding: 1px 7px; border-radius: 5px; }
+.sug .note { font-size: .8rem; color: var(--muted); margin-top: 3px; }
+.sug .note.warn { color: var(--under); }
+.bar { height: 4px; background: var(--sunk); border-radius: 99px; margin-top: 6px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+@media (max-width: 520px) { .sug { grid-template-columns: auto minmax(0, 1fr); } .sug .btn { grid-column: 2; justify-self: start; } }
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: var(--r); padding: 14px; color: var(--muted); }
+.shop { display: grid; gap: 8px; }
+details.rec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; }
+details.rec summary { cursor: pointer; font-weight: 700; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+details.rec summary small { font-weight: 400; color: var(--muted); font-family: var(--mono); }
+details.rec ul { list-style: none; padding: 0; margin: 10px 0 2px; display: grid; gap: 4px; }
+details.rec li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; font-size: .9rem; }
+details.rec li .q { font-family: var(--mono); font-size: .84rem; text-align: right; }
+.foot { font-size: .82rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
+.busy { opacity: .55; transition: opacity .15s; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Recomp Meal Planner</h1>
+      <p>Plans a day from your Recipe Creator recipes only · <span id="libmeta"></span></p>
+    </div>
+    <span class="chip" id="examplechip" hidden>Example targets · paste yours</span>
+  </header>
+
+  <div class="grid">
+    <aside class="panel inputs" aria-label="Targets and settings">
+      <div class="blk">
+        <label class="lbl" for="paste">Paste today's targets</label>
+        <textarea id="paste" placeholder="2450 kcal, P 190, C 260, F 70, Fibre 35"></textarea>
+        <div class="row"><button class="btn small" id="readpaste" type="button">Read targets</button><span class="hint" id="pastemsg"></span></div>
+      </div>
+      <div class="blk">
+        <span class="lbl">Targets</span>
+        <div class="fields">
+          <label class="field"><span>Energy (kcal)</span><input type="number" id="t-kcal" min="0" step="10" inputmode="numeric"><small id="kj"></small></label>
+          <label class="field"><span>Protein (g)</span><input type="number" id="t-p" min="0" step="1" inputmode="numeric"><small>±5 g</small></label>
+          <label class="field"><span>Carbs (g)</span><input type="number" id="t-c" min="0" step="1" inputmode="numeric"><small>±10%</small></label>
+          <label class="field"><span>Fat (g)</span><input type="number" id="t-f" min="0" step="1" inputmode="numeric"><small>±10%</small></label>
+          <label class="field"><span>Fibre (g, optional)</span><input type="number" id="t-fib" min="0" step="1" inputmode="numeric"><small>at least −10%</small></label>
+        </div>
+      </div>
+      <div class="blk">
+        <span class="lbl" id="mealslbl">Meals per day</span>
+        <div class="seg" role="group" aria-labelledby="mealslbl" id="mealseg"></div>
+      </div>
+      <div class="blk">
+        <span class="lbl">Lock a slot (optional)</span>
+        <div class="locks" id="locks"></div>
+        <p class="hint">A locked recipe stays put when you regenerate. Set a portion to pin that too.</p>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="build" type="button">Build plan</button>
+        <button class="btn" id="regen" type="button">Regenerate</button>
+      </div>
+    </aside>
+
+    <section class="results" id="results" aria-live="polite">
+      <div id="verdict"></div>
+      <div class="nip">
+        <h2>Daily totals <span id="totmeta"></span></h2>
+        <div class="tblwrap"><table class="tot" id="tot"></table></div>
+      </div>
+      <div>
+        <div class="sechead"><h2>Meals</h2><span class="hint" id="planmeta"></span></div>
+        <div class="meals" id="meals"></div>
+      </div>
+      <div>
+        <div class="sechead"><h2>Suggestions</h2><span class="hint">Ranked by share of the gap closed</span></div>
+        <div class="sugs" id="sugs"></div>
+      </div>
+      <div id="shopwrap">
+        <div class="sechead"><h2>Shopping list for today</h2><span class="hint">Scaled from each recipe's batch by portion ÷ servings</span></div>
+        <div class="shop" id="shop"></div>
+      </div>
+      <p class="foot" id="foot"></p>
+    </section>
+  </div>
+</div>
+
+<script type="application/json" id="recipe-data">{"recipes":[{"id":"avocado-tuna-salad","file":"avocado-tuna-salad.md","name":"Avocado Tuna Salad","types":["lunch"],"inf":false,"serv":4.0,"kcal":555.0,"p":44.0,"c":51.0,"f":16.0,"fib":14.0,"ing":[["240 g (about 1½ large)","avocados, flesh only"],["4 × 185 g cans","tuna in springwater, drained (about 480 g drained)"],["600 g (4 medium)","tomatoes, diced"],["400 g can","no-added-salt red kidney beans, drained and rinsed"],["80 g (½ small)","red onion, finely diced"],["20 g (½ bunch)","coriander, leaves chopped"],["90 mL (4½ tbsp)","lime juice (about 3 limes)"],["2 g (1 tsp)","chilli powder"],["20 mL (1 tbsp)","sweet chilli or hot chilli sauce, to serve"],["400 g","cooked brown rice (2 × 250 g microwave pouches, or from 135 g / ⅔ cup uncooked)"],["160 g","mixed salad leaves"]]},{"id":"blueberry-overnight-oats","file":"blueberry-overnight-oats.md","name":"Blueberry Overnight Oats","types":["breakfast"],"inf":false,"serv":4.0,"kcal":570.0,"p":37.0,"c":50.0,"f":18.0,"fib":14.0,"ing":[["200 g (2¼ cups)","rolled oats"],["400 mL","water"],["1 kg","fat-free plain Greek yoghurt (e.g. Chobani 0%)"],["60 g (⅓ cup)","chia seeds"],["20 mL (1 tbsp)","vanilla extract"],["8 sachets","stevia (e.g. Natvia), or to taste"],["400 g","frozen blueberries"],["60 g","flaked or slivered almonds, toasted"]]},{"id":"blueberry-pie-smoothie","file":"blueberry-pie-smoothie.md","name":"Blueberry Pie Smoothie","types":["snack"],"inf":false,"serv":1.0,"kcal":260.0,"p":28.0,"c":22.0,"f":4.0,"fib":8.0,"ing":[["30 g (1 scoop)","vanilla whey protein powder"],["95 g (⅔ US cup)","frozen mixed berries"],["60 g (2 large handfuls)","baby spinach"],["20 g (¼ cup)","rolled oats"],["250 mL (1 cup)","cold water"],["5 mL (1 tsp)","vanilla extract"],["Pinch","ground cinnamon"],["2 sachets","stevia (e.g. Natvia), or to taste"]]},{"id":"broccoli-and-tuna-salad","file":"broccoli-and-tuna-salad.md","name":"Broccoli and Tuna Salad","types":["lunch"],"inf":false,"serv":4.0,"kcal":540.0,"p":59.0,"c":29.0,"f":18.0,"fib":17.0,"ing":[["900 g (about 3 heads)","broccoli, cut into small florets"],["3 × 185 g cans","tuna in springwater, drained (about 400 g drained)"],["400 g can","no-added-salt chickpeas, drained and rinsed"],["100 g (1 small)","red onion, finely chopped"],["100 g","almonds, chopped"],["2","spring onions, thinly sliced"],["500 g","fat-free plain Greek yoghurt (e.g. Chobani 0%)"],["40 mL (2 tbsp)","red wine vinegar"],["1 lemon",", zested and juiced (about 20 mL juice)"],["1 g (pinch)","salt"],["1 tsp","cracked black pepper"]]},{"id":"buffalo-chicken-rice-bowls","file":"buffalo-chicken-rice-bowls.md","name":"Buffalo Chicken Rice Bowls","types":["lunch"],"inf":false,"serv":4.0,"kcal":590.0,"p":53.0,"c":52.0,"f":15.0,"fib":12.0,"ing":[["650 g","chicken breast fillets, trimmed (yields ~500 g cooked)"],["1.5 L","cold water, for poaching"],["40 mL (2 tbsp)","cayenne pepper hot sauce (e.g. Frank's RedHot Original), divided"],["1 tsp","smoked paprika"],["140 g (about ¾ cup)","brown rice, rinsed"],["400 mL","water, for the rice"],["400 g","frozen cauliflower rice (e.g. Birds Eye)"],["1 × 400 g can","no-added-salt chickpeas, drained and rinsed (~240 g drained)"],["150 g","reduced-fat Greek-style yoghurt"],["20 mL (1 tbsp)","lemon juice, divided"],["1 tsp","dried dill"],["½ tsp","garlic powder"],["½ tsp","onion powder"],["Pinch","freshly ground black pepper"],["5–10 mL (1–2 tsp)","water, to thin"],["160 g (about 4 cups)","cos or iceberg lettuce, shredded"],["300 g (2 medium)","capsicums, mixed colours, diced"],["300 g","cherry tomatoes, halved"],["240 g (2)","Lebanese cucumbers, diced"],["40 g (¼ cup)","red onion, finely chopped"],["25 g (¼ cup, about 2)","spring onions, thinly sliced"],["1 medium","avocado (~170 g flesh)"]]},{"id":"cake-for-breakfast-shake","file":"cake-for-breakfast-shake.md","name":"Cake for Breakfast Shake","types":["snack","breakfast"],"inf":false,"serv":1.0,"kcal":295.0,"p":28.0,"c":30.0,"f":5.0,"fib":4.0,"ing":[["40 g (½ cup)","rolled oats"],["30 g (1 scoop)","vanilla whey protein powder"],["5 mL (1 tsp)","vanilla extract"],["1 sachet","stevia (e.g. Natvia)"],["Pinch (about 0.25 g)","salt"],["250 mL (1 cup)","cold water"],["1 handful (about 6 cubes)","ice"],["4 g (1 tsp)","hundreds and thousands (sprinkles)"]]},{"id":"chicken-tacos","file":"chicken-tacos.md","name":"Chicken Tacos","types":["dinner"],"inf":false,"serv":4.0,"kcal":535.0,"p":46.0,"c":49.0,"f":14.0,"fib":12.0,"ing":[["600 g","skinless chicken breast fillets"],["10 mL (2 tsp)","olive oil"],["1 tsp","smoked paprika"],["1 tsp","ground cumin"],["320 g (2 large)","tomatoes, finely diced"],["80 g (½ medium)","brown onion, finely diced"],["20 g (½ bunch)","coriander, leaves chopped"],["30 g (1)","jalapeño or long green chilli, seeded and finely chopped"],["20 mL (1 tbsp)","lime juice"],["400 g can","refried beans (e.g. Old El Paso)"],["60 g (4)","spring onions, finely sliced"],["¼ tsp","dried chilli flakes"],["320 g (about 16 large leaves)","cos lettuce leaves"],["120 g (1 small)","avocado, sliced"],["400 g","cooked brown rice (2 × 250 g microwave pouches, or from 135 g / ⅔ cup uncooked)"]]},{"id":"chicken-veggie-stir-fry","file":"chicken-veggie-stir-fry.md","name":"Chicken Veggie Stir-Fry","types":["dinner"],"inf":false,"serv":4.0,"kcal":545.0,"p":49.0,"c":62.0,"f":10.0,"fib":12.0,"ing":[["600 g","skinless chicken breast, cut into thin strips"],["10 mL (2 tsp)","olive or canola oil"],["10 mL (2 tsp)","olive or canola oil"],["480 g (2 heads)","broccoli, cut into small florets"],["400 g","snow peas or sugar snap peas, trimmed"],["320 g (1 large)","red capsicum, sliced"],["40 mL (2 tbsp)","salt-reduced soy sauce"],["12 g (4 tsp)","garlic powder"],["10 g (1 tbsp)","onion powder"],["¼ tsp","dried chilli flakes, or to taste"],["600 g","cooked brown rice (from 200 g / 1 cup uncooked, or microwave pouches)"]]},{"id":"cookie-dough-balls","file":"cookie-dough-balls.md","name":"Cookie Dough Balls","types":["snack"],"inf":false,"serv":8.0,"kcal":230.0,"p":16.0,"c":12.0,"f":13.0,"fib":4.0,"ing":[["90 g (1 cup)","rolled oats"],["120 g (about ⅓ cup + 2 tbsp)","natural peanut butter, smooth or crunchy (no added salt)"],["100 g (3⅓ scoops)","vanilla whey protein powder"],["40 g (⅓ cup)","linseed (flaxseed) meal"],["60 mL (¼ cup)","Queen sugar-free maple-flavoured syrup"],["80 mL (⅓ cup)","unsweetened almond milk, plus extra if needed"],["1.25 mL (¼ tsp)","vanilla essence"],["30 g (about 2½ tbsp)","Noshu no-added-sugar dark choc chips"]]},{"id":"energy-muffins","file":"energy-muffins.md","name":"Energy Muffins","types":["snack"],"inf":false,"serv":4.0,"kcal":225.0,"p":19.0,"c":25.0,"f":4.0,"fib":5.0,"ing":[["130 g (1 large)","ripe banana, peeled"],["150 g (1 medium)","red or green apple, peeled and grated"],["50 g (1)","egg"],["100 g","fat-free plain Greek yoghurt (e.g. Chobani 0%)"],["40 mL (2 tbsp)","unsweetened almond milk"],["75 g (½ cup)","wholemeal plain flour"],["60 g (2 scoops)","vanilla whey protein powder"],["15 g (1 tbsp)","chia seeds"],["4 g (1 tsp)","baking powder"],["1 tsp","ground cinnamon"],["2 g","olive oil spray"]]},{"id":"garlic-prawns","file":"garlic-prawns.md","name":"Garlic Prawns","types":["dinner"],"inf":false,"serv":4.0,"kcal":535.0,"p":45.0,"c":66.0,"f":7.0,"fib":11.0,"ing":[["600 g","raw peeled prawns, deveined, tails removed (about 1.2 kg whole raw prawns, or frozen raw peeled)"],["40 g (about 8 cloves, or 2 tbsp jarred)","garlic, minced"],["600 g (4 medium)","tomatoes, cut into 1 cm cubes"],["40 mL (2 tbsp)","red wine vinegar"],["2 tsp","dried basil"],["3 g (½ tsp)","salt"],["¼ tsp","cracked black pepper"],["20 mL (1 tbsp)","olive oil"],["400 g can","no-added-salt cannellini beans, drained and rinsed"],["120 g (4 cups loosely packed)","baby spinach"],["600 g","cooked white rice (from 200 g / 1 cup uncooked jasmine rice, or microwave rice pouches)"]]},{"id":"granola-breakfast-bowl","file":"granola-breakfast-bowl.md","name":"Granola Breakfast Bowl","types":["breakfast"],"inf":false,"serv":4.0,"kcal":545.0,"p":34.0,"c":45.0,"f":22.0,"fib":12.0,"ing":[["270 g (3 cups)","rolled oats (not quick oats)"],["50 g","almonds, roughly chopped"],["45 g","cashews, roughly chopped"],["45 g","walnuts, roughly chopped"],["30 g (3 tbsp)","pepitas (pumpkin seeds)"],["25 g (2 tbsp)","sunflower seeds"],["15 g (1 tbsp)","chia seeds"],["80 mL (⅓ cup)","maple syrup"],["80 mL (⅓ cup)","olive oil (light or extra virgin)"],["5 mL (1 tsp)","ground cinnamon"],["5 mL (1 tsp)","vanilla extract"],["1 g (pinch)","salt"],["40 g","dried apricots, chopped"],["35 g (¼ cup)","sultanas"],["1 kg","fat-free plain Greek yoghurt (e.g. Chobani 0%)"],["300 g","strawberries, hulled and sliced"],["300 g","raspberries (fresh, or frozen and thawed)"]]},{"id":"healthy-fried-rice","file":"healthy-fried-rice.md","name":"Healthy Fried Rice","types":["dinner"],"inf":false,"serv":4.0,"kcal":610.0,"p":57.0,"c":58.0,"f":14.0,"fib":10.0,"ing":[["20 mL (1 tbsp)","olive or canola oil, divided"],["400 g (about 12)","egg whites, or liquid egg whites from a carton"],["200 g (4)","eggs"],["500 g","skinless chicken breast, diced into 1.5 cm pieces"],["2 cloves (10 g)","garlic, finely chopped"],["700 g","frozen mixed vegetables (peas, corn, carrot, beans)"],["480 g","cooked brown rice, chilled (from 160 g / ¾ cup uncooked, or 2 × 250 g microwave pouches)"],["10 g (1 tbsp)","onion powder"],["4 g (2 tsp)","chilli powder"],["30 mL (1½ tbsp)","salt-reduced soy sauce"],["60 g (4)","spring onions, sliced"]]},{"id":"honey-mustard-chicken-salad","file":"honey-mustard-chicken-salad.md","name":"Honey Mustard Chicken Salad","types":["lunch"],"inf":false,"serv":4.0,"kcal":565.0,"p":46.0,"c":46.0,"f":20.0,"fib":12.0,"ing":[["600 g","orange sweet potato (kumara), unpeeled, cut into 2 cm cubes"],["10 mL (2 tsp)","extra virgin olive oil"],["600 g","skinless chicken breast fillets (about 3)"],["10 mL (2 tsp)","extra virgin olive oil"],["1 tsp","smoked paprika"],["1 tsp","garlic powder"],["¼ tsp","salt"],["½ tsp","cracked black pepper"],["40 g (2 tbsp)","wholegrain mustard"],["20 g (1 tbsp)","Dijon mustard"],["40 mL (2 tbsp)","extra virgin olive oil"],["28 g (1 tbsp)","honey"],["30 mL (1½ tbsp)","lemon juice (about 1 lemon)"],["240 g","baby spinach (2 × 120 g bags)"],["480 g","ripe tomatoes (4 medium), cut into wedges"],["100 g (⅔ cup)","red onion (1 small), thinly sliced"],["400 g","can no-added-salt chickpeas, drained and rinsed (240 g drained)"]]},{"id":"lemon-and-almond-roasted-salad","file":"lemon-and-almond-roasted-salad.md","name":"Lemon and Almond Roasted Salad","types":["lunch"],"inf":false,"serv":4.0,"kcal":540.0,"p":57.0,"c":29.0,"f":18.0,"fib":12.0,"ing":[["600 g","skinless chicken breast fillets"],["2 × 400 g cans","no-added-salt chickpeas, drained, rinsed and patted dry (about 480 g)"],["1 tsp","sweet paprika"],["1 lemon",", zested (save the juice for the dressing)"],["1 tsp","cracked black pepper"],["1.5 g (¼ tsp)","salt"],["20 mL (1 tbsp)","olive oil"],["60 g","flaked almonds"],["340 g (1⅓ cups)","fat-free plain Greek yoghurt (e.g. Chobani 0%)"],["40 mL (2 tbsp)","lemon juice (from the zested lemon, plus extra if needed)"],["2","spring onions, finely sliced"],["10 g (½ bunch)","flat-leaf parsley, chopped"],["240 g (2 × 120 g bags)","mixed salad leaves"],["400 g","cherry tomatoes, halved"],["320 g (2 Lebanese)","cucumbers, sliced"]]},{"id":"loaded-bagels-three-ways","file":"loaded-bagels-three-ways.md","name":"Loaded Bagels Three Ways","types":["breakfast"],"inf":false,"serv":4.0,"kcal":555.0,"p":42.0,"c":59.0,"f":13.0,"fib":15.0,"ing":[["4 (about 90 g each)","wholemeal bagels, halved"],["120 g (1 small)","avocado, flesh only"],["120 g","light cottage cheese (e.g. Bulla Light)"],["10 mL (2 tsp)","lemon juice"],["240 g (about 16)","cherry tomatoes, sliced"],["Small handful","fresh basil leaves, torn"],["120 g","light cottage cheese"],["60 g","smoked salmon"],["160 g (1 Lebanese)","cucumber, thinly sliced"],["2 tsp","fresh dill, chopped"],["80 g (4 tbsp)","light hummus"],["700 g","fat-free plain Greek yoghurt (e.g. Chobani 0%)"],["400 g","frozen raspberries, thawed"],["½ tsp","cracked black pepper"]]},{"id":"loaded-baked-potato","file":"loaded-baked-potato.md","name":"Loaded Baked Potato","types":["lunch"],"inf":false,"serv":4.0,"kcal":560.0,"p":44.0,"c":69.0,"f":9.0,"fib":16.0,"ing":[["1.2 kg (4 medium, about 300 g each)","washed potatoes (e.g. Sebago or Royal Blue), skin on"],["5 mL (1 tsp)","olive oil"],["400 g can","no-added-salt red kidney beans, drained and rinsed"],["1 tsp","smoked paprika"],["1 tsp","ground cumin"],["40 mL (2 tbsp)","water"],["500 g","light cottage cheese (e.g. Bulla Light)"],["80 g","reduced-fat grated tasty cheese"],["200 g","fat-free plain Greek yoghurt (e.g. Chobani 0%)"],["80 g (4)","spring onions, sliced"],["320 g (2 large)","tomatoes, finely diced"],["80 g (½ medium)","brown onion, finely diced"],["20 g (½ bunch)","coriander, leaves chopped"],["30 g (1)","jalapeño or long green chilli, seeded and finely chopped"],["20 mL (1 tbsp)","lime juice"]]},{"id":"low-carb-enchiladas","file":"low-carb-enchiladas.md","name":"Low Carb Enchiladas","types":["dinner"],"inf":false,"serv":4.0,"kcal":540.0,"p":57.0,"c":32.0,"f":13.0,"fib":21.0,"ing":[["10 mL (2 tsp)","olive oil, plus a light spray for the dish"],["150 g (1 medium)","brown onion, sliced"],["5 g (1 tsp)","crushed garlic"],["600 g","skinless chicken breast, diced into 1 cm cubes"],["120 g (4 cups)","baby spinach, chopped"],["400 g can","black beans, drained and rinsed (about 240 g)"],["170 g","tomato paste"],["10 g (1 tbsp)","taco seasoning (e.g. Mingle)"],["2 tsp","ground cumin"],["1 sachet","stevia (e.g. Natvia)"],["200 mL","hot water"],["8","Simson's Pantry mini low carb wraps (about 30 g each)"],["60 g","reduced-fat grated tasty cheese"],["400 g (3 medium)","tomatoes, chopped"],["400 g (2–3 Lebanese)","cucumbers, chopped"],["40 g (¼ small)","red onion, finely sliced"],["20 mL (1 tbsp)","lime juice"]]},{"id":"open-breakfast-sandwich","file":"open-breakfast-sandwich.md","name":"Open Breakfast Sandwich","types":["breakfast"],"inf":false,"serv":4.0,"kcal":510.0,"p":36.0,"c":31.0,"f":23.0,"fib":10.0,"ing":[["8 slices (about 336 g)","wholegrain high-protein bread (e.g. Burgen Soy-Lin)"],["160 g (1 large)","avocado, flesh mashed"],["8 g (2 tsp)","olive oil, or olive oil spray"],["120 g (4 cups loosely packed)","baby spinach"],["25 mL (1¼ tbsp)","balsamic vinegar"],["500 g (about 15)","egg whites, or liquid egg whites from a carton"],["300 g (6)","eggs"],["400 g (4 small)","tomatoes, sliced"],["½ tsp","cracked black pepper"]]},{"id":"pb-sandwich-shake","file":"pb-sandwich-shake.md","name":"PB Sandwich Shake","types":["snack"],"inf":false,"serv":1.0,"kcal":285.0,"p":29.0,"c":10.0,"f":12.0,"fib":8.0,"ing":[["30 g (1 scoop)","strawberry or chocolate whey protein powder"],["20 g (1 Aus tbsp)","natural smooth peanut butter (no added salt)"],["100 g","frozen raspberries"],["250 mL (1 cup)","cold water"],["1 handful (about 6 cubes)","ice"]]},{"id":"power-pikelets","file":"power-pikelets.md","name":"Power Pikelets","types":["snack"],"inf":false,"serv":2.0,"kcal":260.0,"p":21.0,"c":27.0,"f":7.0,"fib":7.0,"ing":[["120 g (1 medium)","ripe banana, peeled"],["50 g (1)","egg"],["60 g (2)","egg whites"],["30 g (3 US tbsp, about 2 Aus tbsp)","wholemeal self-raising flour"],["30 g (1 scoop)","vanilla or chocolate whey protein powder"],["20 mL (1 tbsp)","unsweetened almond milk"],["10 g (1 tbsp)","Noshu no-added-sugar dark choc chips"],["2 g","olive oil spray"],["100 g","frozen raspberries, thawed"]]},{"id":"protein-chia-pudding","file":"protein-chia-pudding.md","name":"Protein Chia Pudding","types":["snack","breakfast"],"inf":false,"serv":2.0,"kcal":235.0,"p":19.0,"c":9.0,"f":10.0,"fib":9.0,"ing":[["250 mL (1 cup)","unsweetened vanilla almond milk"],["30 g (1 scoop)","vanilla or chocolate whey protein powder"],["48 g (4 US tbsp, about ⅓ cup)","chia seeds"],["20 mL (1 tbsp)","Queen sugar-free maple-flavoured syrup"],["¼ tsp","vanilla essence"],["60 g (¼ cup)","vanilla Greek yoghurt (e.g. Chobani Fit vanilla)"],["75 g (½ cup)","strawberries, sliced"]]},{"id":"protein-pancakes","file":"protein-pancakes.md","name":"Protein Pancakes","types":["breakfast"],"inf":false,"serv":4.0,"kcal":555.0,"p":48.0,"c":59.0,"f":10.0,"fib":14.0,"ing":[["240 g (2⅔ cups)","rolled oats"],["400 g","light cottage cheese (e.g. Bulla Light)"],["400 g (about 12)","egg whites, or liquid egg whites from a carton"],["200 g (2 medium)","ripe bananas, peeled"],["4 sachets","stevia (e.g. Natvia)"],["2 tsp","ground cinnamon"],["8 g (2 tsp)","olive oil, or a light coating of olive oil spray"],["600 g","fat-free plain Greek yoghurt (e.g. Chobani 0%)"],["400 g","frozen raspberries, thawed"],["4 sachets","stevia"],["1 tsp","ground cinnamon"]]},{"id":"quinoa-chicken-salad","file":"quinoa-chicken-salad.md","name":"Quinoa Chicken Salad","types":["lunch"],"inf":false,"serv":4.0,"kcal":615.0,"p":58.0,"c":45.0,"f":19.0,"fib":13.0,"ing":[["700 g","skinless chicken breast fillets"],["160 g (¾ cup)","quinoa, rinsed (makes about 480 g cooked)"],["320 mL","water, for the quinoa"],["400 g can","no-added-salt chickpeas, drained and rinsed"],["160 g (about 5 cups)","kale, stems removed, leaves finely shredded"],["120 g (1 small)","red onion, finely chopped"],["40 g (¼ cup)","pepitas (pumpkin seeds), toasted"],["2","lemons, zested and juiced (about 80 mL juice)"],["60 mL (3 tbsp)","white wine vinegar"],["30 mL (1½ tbsp)","extra virgin olive oil"],["4 g (2 tsp)","ground cumin"],["1.5 g (¼ tsp)","salt"],["½ tsp","cracked black pepper"]]},{"id":"savoury-breakfast-oats","file":"savoury-breakfast-oats.md","name":"Savoury Breakfast Oats","types":["breakfast"],"inf":false,"serv":4.0,"kcal":545.0,"p":43.0,"c":42.0,"f":20.0,"fib":11.0,"ing":[["10 mL (½ tbsp)","olive oil"],["300 g","button mushrooms, sliced"],["2 cloves (10 g)","garlic, crushed"],["560 g","turkey mince"],["160 g (1 cup)","frozen peas"],["240 g (2⅔ cups)","rolled oats"],["320 mL","water"],["50 mL (2½ tbsp)","balsamic vinegar, divided"],["240 g (about 4 large handfuls)","baby spinach"],["1 g (pinch)","salt"],["½ tsp","cracked black pepper"]]},{"id":"savoury-turkey-bake","file":"savoury-turkey-bake.md","name":"Savoury Turkey Bake","types":["breakfast"],"inf":false,"serv":4.0,"kcal":585.0,"p":55.0,"c":37.0,"f":23.0,"fib":11.0,"ing":[["10 g (2 tsp)","olive oil"],["150 g (1 medium)","brown onion, finely chopped"],["500 g","turkey mince"],["400 g (about 12)","egg whites, or liquid egg whites from a carton"],["200 g (4)","eggs"],["200 g (2¼ cups)","rolled oats"],["300 g","broccoli, finely chopped"],["300 g","cauliflower, finely chopped"],["4 g (2 tsp)","garlic powder"],["1.5 g (¼ tsp)","salt"],["¼ tsp","cracked black pepper"],["8 g","olive oil spray, for greasing (about 2 tsp oil)"],["20 mL (1 tbsp)","hot sauce (e.g. sriracha), to serve"]]},{"id":"spicy-thai-prawn-salad","file":"spicy-thai-prawn-salad.md","name":"Spicy Thai Prawn Salad","types":["lunch"],"inf":false,"serv":4.0,"kcal":600.0,"p":48.0,"c":51.0,"f":20.0,"fib":12.0,"ing":[["600 g","raw peeled prawns, deveined, tails removed (about 1.2 kg whole raw prawns, or frozen raw peeled)"],["60 mL (3 tbsp)","lime juice (about 3 limes)"],["15 mL (3 tsp)","fish sauce"],["30 mL (1½ tbsp)","peanut oil"],["10 mL (2 tsp)","sesame oil"],["8 sachets","stevia (e.g. Natvia), or to taste"],["2 tsp","dried chilli flakes"],["160 g","dried rice vermicelli noodles"],["300 g","frozen shelled edamame"],["240 g (2 × 120 g bags)","mixed salad leaves"],["300 g (2 Lebanese)","cucumbers, halved and sliced"],["240 g (2 medium)","carrots, julienned or coarsely grated"],["240 g (1 large)","red capsicum, thinly sliced"],["240 g (about ⅙ head)","red cabbage, finely shredded"],["20 g (½ bunch)","mint, leaves picked"],["20 g (½ bunch)","coriander, leaves picked"],["40 g","unsalted roasted peanuts, roughly chopped"]]},{"id":"stir-fry-cabbage-and-pork","file":"stir-fry-cabbage-and-pork.md","name":"Stir-Fry Cabbage & Pork","types":["dinner"],"inf":false,"serv":4.0,"kcal":580.0,"p":43.0,"c":62.0,"f":14.0,"fib":12.0,"ing":[["600 g","pork fillet (tenderloin) or lean pork stir-fry strips, trimmed and thinly sliced"],["20 mL (1 tbsp)","canola or peanut oil"],["20 g (1 tbsp)","Kerrygold butter (or any salted butter)"],["240 g (about 3 stalks)","celery, sliced on the diagonal"],["1 kg (about ½ medium)","green cabbage, finely shredded"],["320 g (2 medium)","brown onions, sliced"],["3 cloves (15 g)","garlic, finely chopped"],["10 g (2 tsp)","fresh ginger, finely grated"],["40 mL (2 tbsp)","salt-reduced soy sauce"],["½ tsp","ground white pepper"],["600 g","cooked brown rice (from 200 g / 1 cup uncooked, or microwave brown rice pouches)"],["2","spring onions, thinly sliced"]]},{"id":"sweet-egg-scramble","file":"sweet-egg-scramble.md","name":"Sweet Egg Scramble","types":["breakfast"],"inf":false,"serv":4.0,"kcal":550.0,"p":43.0,"c":36.0,"f":22.0,"fib":12.0,"ing":[["400 g (about 12)","egg whites, or liquid egg whites from a carton"],["200 g (4)","eggs"],["60 g (2 scoops)","vanilla whey protein powder"],["4 sachets","stevia (e.g. Natvia)"],["5 mL (1 tsp)","vanilla extract"],["400 g","frozen mixed berries"],["8 g (2 tsp)","olive oil, or olive oil spray"],["8 slices (about 336 g)","wholegrain high-protein bread (e.g. Burgen Soy-Lin)"],["60 g","flaked almonds, toasted"],["1 tsp","ground cinnamon"]]},{"id":"thai-beef-salad","file":"thai-beef-salad.md","name":"Thai Beef Salad","types":["lunch"],"inf":false,"serv":4.0,"kcal":565.0,"p":50.0,"c":49.0,"f":17.0,"fib":10.0,"ing":[["600 g","lean beef rump or sirloin steak, fat trimmed"],["20 mL (1 tbsp)","salt-reduced soy sauce"],["10 mL (2 tsp)","fish sauce"],["40 mL (2 tbsp)","lime juice"],["10 mL (2 tsp)","olive oil"],["160 g","dried rice vermicelli noodles"],["200 g","frozen shelled edamame"],["400 g (4 hearts)","baby cos lettuce, leaves separated and torn"],["200 g (2 cups)","bean sprouts"],["360 g (3 medium)","tomatoes, cut into wedges"],["400 g (2 Lebanese)","cucumbers, sliced"],["160 g (1 medium)","red onion, thinly sliced"],["60 g (1 bunch mint plus ½ bunch coriander)","mint and coriander leaves"],["80 mL (4 tbsp)","lime juice (about 3 limes)"],["2 tsp","dried chilli flakes"],["40 g","unsalted roasted peanuts, chopped"]]},{"id":"thai-peanut-chicken","file":"thai-peanut-chicken.md","name":"Thai Peanut Chicken","types":["dinner"],"inf":false,"serv":4.0,"kcal":610.0,"p":55.0,"c":47.0,"f":19.0,"fib":12.0,"ing":[["600 g","skinless chicken breast fillets"],["1 L","water, for poaching"],["100 g (5 tbsp)","natural peanut butter, no added salt (e.g. Mayver's or Bega Simply Nuts)"],["40 mL (2 tbsp)","salt-reduced soy sauce"],["60 mL (3 tbsp)","lemon juice (about 1½ lemons)"],["60 mL (3 tbsp)","rice vinegar"],["1 tsp","cayenne pepper (use ½ tsp for mild)"],["60–80 mL","hot water, to thin"],["200 g","broccoli, cut into small florets"],["200 g (1 medium)","red capsicum, sliced"],["200 g (2 small)","carrots, julienned or grated"],["200 g","snow peas, trimmed"],["200 g","frozen shelled edamame"],["400 g","cooked brown rice (from 140 g / ⅔ cup uncooked, or microwave brown rice pouches)"],["2","spring onions, thinly sliced"],["15 g (½ bunch)","coriander, leaves picked"],["1","lime, cut into wedges"]]},{"id":"trail-mix","file":"trail-mix.md","name":"Trail Mix","types":["snack"],"inf":false,"serv":5.0,"kcal":300.0,"p":15.0,"c":17.0,"f":17.0,"fib":9.0,"ing":[["40 g (⅓ cup)","raw unsalted cashews"],["70 g (½ cup)","pepitas (pumpkin seeds)"],["180 g (about 1½ cups)","roasted fava beans (e.g. The Happy Snack Company)"],["20 g (about 2½ cups)","Cobs sea salt popcorn"],["½ tsp","smoked paprika"],["½ tsp","ground cumin"]]},{"id":"turkey-tacos","file":"turkey-tacos.md","name":"Turkey Tacos","types":["dinner"],"inf":false,"serv":4.0,"kcal":550.0,"p":44.0,"c":56.0,"f":15.0,"fib":13.0,"ing":[["10 mL (2 tsp)","olive oil"],["600 g","lean turkey mince"],["6 g (1 tbsp)","mild chilli powder (no added salt)"],["10 g (1 tbsp)","onion powder"],["6 g (2 tsp)","garlic powder"],["½ tsp","smoked paprika"],["¼ tsp","cayenne pepper"],["400 g can","no-added-salt red kidney beans, drained and rinsed (about 320 g)"],["320 g (2 large)","tomatoes, finely diced"],["80 g (½ medium)","brown onion, finely diced"],["20 g (½ bunch)","coriander, leaves chopped"],["30 g (1)","jalapeño or long green chilli, seeded and finely chopped"],["20 mL (1 tbsp)","lime juice"],["480 g","cooked brown and wild rice blend (2 × 250 g microwave pouches, e.g. SunRice)"],["320 g (12–16 large leaves)","cos lettuce leaves"],["20 mL (1 tbsp)","hot sauce of choice"]]}],"excluded":[],"parsed":33,"builtAt":"8 Oct 2026"}</script>
+<script>
+// ===== Planner core: deterministic, no network, no AI =====
+var STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+var LAYOUT = {
+  3: ['breakfast', 'lunch', 'dinner'],
+  4: ['breakfast', 'lunch', 'snack', 'dinner'],
+  5: ['breakfast', 'snack', 'lunch', 'snack', 'dinner'],
+  6: ['breakfast', 'snack', 'lunch', 'snack', 'dinner', 'snack']
+};
+var MK = ['kcal', 'p', 'c', 'f', 'fib'];
+var CAP = 8000;
+
+function zero() { return { kcal: 0, p: 0, c: 0, f: 0, fib: 0 }; }
+function totals(items) {
+  var t = zero();
+  items.forEach(function (it) { MK.forEach(function (k) { t[k] += (it.r[k] || 0) * it.m; }); });
+  return t;
+}
+function tol(T) { return { p: 5, kcal: 0.05 * T.kcal, c: 0.10 * T.c, f: 0.10 * T.f, fib: T.fib ? 0.10 * T.fib : 0 }; }
+function macroStatus(k, val, T) {
+  var d = val - T[k], tl = tol(T)[k];
+  if (k === 'fib') { if (!T.fib) return 'na'; return d >= -tl ? 'ok' : 'under'; }
+  if (Math.abs(d) <= tl + 1e-9) return 'ok';
+  return d > 0 ? 'over' : 'under';
+}
+function isValid(t, T) {
+  return ['p', 'kcal', 'c', 'f'].every(function (k) { return macroStatus(k, t[k], T) === 'ok'; });
+}
+// Lower is better. Weights encode priority: protein >> kcal >> carbs/fat > fibre.
+function score(t, T) {
+  var tl = tol(T);
+  function ex(k) { return Math.max(0, Math.abs(t[k] - T[k]) - tl[k]) / T[k]; }
+  var s = 1000 * ex('p') + 100 * ex('kcal') + 10 * (ex('c') + ex('f'));
+  if (T.fib) s += 2 * Math.max(0, (T.fib - tl.fib) - t.fib) / T.fib;
+  s += 0.1 * (Math.abs(t.p - T.p) / T.p + Math.abs(t.kcal - T.kcal) / T.kcal +
+    0.5 * Math.abs(t.c - T.c) / T.c + 0.5 * Math.abs(t.f - T.f) / T.f);
+  return s;
+}
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hashStr(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+// Best portions for a fixed set of recipes (coordinate descent, then optional pairwise refine).
+function fitPortions(rs, fixed, T, pairwise) {
+  var n = rs.length, m = rs.map(function (_, i) { return fixed[i] != null ? fixed[i] : 1; });
+  function tot() { var t = zero(); for (var i = 0; i < n; i++) for (var j = 0; j < 5; j++) t[MK[j]] += (rs[i][MK[j]] || 0) * m[i]; return t; }
+  var best = score(tot(), T);
+  for (var pass = 0; pass < 6; pass++) {
+    var changed = false;
+    for (var i = 0; i < n; i++) {
+      if (fixed[i] != null) continue;
+      var keep = m[i];
+      for (var s = 0; s < STEPS.length; s++) {
+        m[i] = STEPS[s]; var sc = score(tot(), T);
+        if (sc < best - 1e-12) { best = sc; keep = STEPS[s]; changed = true; }
+      }
+      m[i] = keep;
+    }
+    if (!changed) break;
+  }
+  if (pairwise) {
+    var improved = true, guard = 0;
+    while (improved && guard++ < 4) {
+      improved = false;
+      for (var a = 0; a < n; a++) for (var b = a + 1; b < n; b++) {
+        if (fixed[a] != null || fixed[b] != null) continue;
+        var ka = m[a], kb = m[b];
+        for (var x = 0; x < STEPS.length; x++) for (var y = 0; y < STEPS.length; y++) {
+          m[a] = STEPS[x]; m[b] = STEPS[y]; var sc2 = score(tot(), T);
+          if (sc2 < best - 1e-12) { best = sc2; ka = STEPS[x]; kb = STEPS[y]; improved = true; }
+        }
+        m[a] = ka; m[b] = kb;
+      }
+    }
+  }
+  return { m: m, s: best };
+}
+
+// locks: array per slot of {id: recipeId|'' , m: number|null}
+function buildPlans(R, T, n, locks) {
+  var slots = LAYOUT[n];
+  var pools = slots.map(function (type, i) {
+    var L = locks[i] || {};
+    if (L.id) { var r = R.find(function (x) { return x.id === L.id; }); if (r) return [r]; }
+    return R.filter(function (r) { return r.types.indexOf(type) >= 0; });
+  });
+  var fixed = slots.map(function (_, i) { return locks[i] && locks[i].m ? locks[i].m : null; });
+  var total = pools.reduce(function (a, p) { return a * p.length; }, 1);
+  var combos = [], seen = {};
+  function push(idx) {
+    var rs = idx.map(function (k, i) { return pools[i][k]; });
+    var ids = rs.map(function (r) { return r.id; });
+    var key = ids.join('|');
+    if (seen[key]) return; seen[key] = 1;
+    if (new Set(ids).size !== ids.length) return; // no recipe twice in a day
+    combos.push(rs);
+  }
+  if (total <= CAP) {
+    var idx = pools.map(function () { return 0; });
+    for (var c = 0; c < total; c++) {
+      push(idx.slice());
+      for (var d = idx.length - 1; d >= 0; d--) { if (++idx[d] < pools[d].length) break; idx[d] = 0; }
+    }
+  } else {
+    var rnd = mulberry32(hashStr(JSON.stringify([T, n, locks])));
+    for (var t = 0; t < CAP * 3 && combos.length < CAP; t++)
+      push(pools.map(function (p) { return Math.floor(rnd() * p.length); }));
+  }
+  var res = combos.map(function (rs) {
+    var fit = fitPortions(rs, fixed, T, false);
+    return { rs: rs, m: fit.m, s: fit.s };
+  });
+  res.sort(function (a, b) { return a.s - b.s; });
+  var top = res.slice(0, 80).map(function (x) {
+    var fit = fitPortions(x.rs, fixed, T, true);
+    return { rs: x.rs, m: fit.m, s: fit.s };
+  });
+  top.sort(function (a, b) { return a.s - b.s || a.rs.map(function (r) { return r.id; }).join().localeCompare(b.rs.map(function (r) { return r.id; }).join()); });
+  var plans = top.map(function (x) {
+    var items = x.rs.map(function (r, i) {
+      return { slot: slots[i], r: r, m: x.m[i], recipeLocked: !!(locks[i] && locks[i].id), portionLocked: fixed[i] != null };
+    });
+    var t = totals(items);
+    return { items: items, t: t, s: x.s, valid: isValid(t, T) };
+  });
+  var valid = plans.filter(function (p) { return p.valid; });
+  return { plans: valid.length ? valid : plans.slice(0, 15), feasible: valid.length > 0, searched: combos.length, total: total };
+}
+
+function fmtDelta(d) {
+  var parts = [];
+  [['p', 'g P'], ['kcal', ' kcal'], ['c', 'g C'], ['f', 'g F']].forEach(function (x) {
+    var v = Math.round(d[x[0]]); if (v) parts.push((v > 0 ? '+' : '−') + Math.abs(v) + x[1]);
+  });
+  return parts.join(', ') || 'no change';
+}
+
+// Up to 3 concrete changes using real recipes / real portion steps, ranked by gap closed.
+// "gap" = out-of-tolerance excess, summed across P, kcal, C, F (relative to target).
+function gapOf(t, T) {
+  var tl = tol(T), g = 0;
+  ['p', 'kcal', 'c', 'f'].forEach(function (k) { g += Math.max(0, Math.abs(t[k] - T[k]) - tl[k]) / T[k]; });
+  return g;
+}
+function suggest(R, T, items) {
+  var t0 = totals(items), s0 = score(t0, T), g0 = gapOf(t0, T), cands = [];
+  var inPlan = {}; items.forEach(function (x) { inPlan[x.r.id] = 1; });
+  function add(key, text, d, apply) {
+    var t1 = zero(); MK.forEach(function (k) { t1[k] = t0[k] + d[k]; });
+    var s1 = score(t1, T), g1 = gapOf(t1, T);
+    var worse = ['p', 'kcal', 'c', 'f'].filter(function (k) {
+      return Math.abs(t1[k] - T[k]) > tol(T)[k] + 1e-9 && Math.abs(t1[k] - T[k]) > Math.abs(t0[k] - T[k]) + 0.5;
+    });
+    var c = { key: key, text: text, d: d, after: t1, apply: apply, worse: worse };
+    if (s1 < s0 - 1e-6) { c.trade = false; c.gain = s0 - s1; c.pct = g0 > 0 ? Math.max(0, (g0 - g1) / g0) : 0; cands.push(c); }
+    else if (g0 > 0 && (g0 - g1) / g0 >= 0.05) { c.trade = true; c.gain = g0 - g1; c.pct = (g0 - g1) / g0; cands.push(c); }
+  }
+  function amt(r, m) { var d = zero(); MK.forEach(function (k) { d[k] = (r[k] || 0) * m; }); return d; }
+  function minus(a, b) { var d = zero(); MK.forEach(function (k) { d[k] = a[k] - b[k]; }); return d; }
+  items.forEach(function (x, i) {
+    var label = x.slot, cur = amt(x.r, x.m), type = x.slot === 'extra snack' ? 'snack' : x.slot;
+    if (!x.portionLocked) STEPS.forEach(function (s) {
+      if (s === x.m) return;
+      add('i' + i, (s > x.m ? 'Raise ' : 'Drop ') + label + ' portion (' + x.r.name + ') to ' + s + '×', minus(amt(x.r, s), cur), { op: 'portion', i: i, m: s });
+    });
+    if (!x.recipeLocked) R.forEach(function (r2) {
+      if (inPlan[r2.id] || r2.types.indexOf(type) < 0) return;
+      (x.portionLocked ? [x.m] : STEPS).forEach(function (s) {
+        add('i' + i, 'Swap ' + label + ' ' + x.r.name + ' → ' + r2.name + ' at ' + s + '×', minus(amt(r2, s), cur), { op: 'swap', i: i, id: r2.id, m: s });
+      });
+    });
+    if (!x.recipeLocked && items.length > 1)
+      add('i' + i, 'Remove ' + label + ' (' + x.r.name + (x.m !== 1 ? ', ' + x.m + '×' : '') + ')', minus(zero(), cur), { op: 'remove', i: i });
+  });
+  R.forEach(function (r) {
+    if (inPlan[r.id] || r.types.indexOf('snack') < 0) return;
+    STEPS.forEach(function (m) {
+      add('add', 'Add ' + r.name + ' as a snack at ' + m + '×', amt(r, m), { op: 'add', id: r.id, m: m });
+    });
+  });
+  cands.sort(function (a, b) { return (a.trade - b.trade) || (b.gain - a.gain) || a.text.localeCompare(b.text); });
+  var out = [], used = {};
+  for (var j = 0; j < cands.length && out.length < 3; j++) {
+    if (used[cands[j].key]) continue; used[cands[j].key] = 1; out.push(cands[j]);
+  }
+  return out;
+}
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Paste parser: "2450 kcal, P 190, C 260, F 70", "190P 260C 70F", "Protein: 180g ...", kJ converted.
+var LBL = { kcal: 'kcal', cal: 'kcal', cals: 'kcal', calories: 'kcal', calorie: 'kcal', energy: 'kcal', kj: 'kj', kilojoules: 'kj',
+  protein: 'p', pro: 'p', p: 'p', carbs: 'c', carb: 'c', carbohydrate: 'c', carbohydrates: 'c', c: 'c', cho: 'c',
+  fat: 'f', fats: 'f', f: 'f', fibre: 'fib', fiber: 'fib', fib: 'fib' };
+function parseTargets(txt) {
+  var toks = [], re = /(\d+(?:\.\d+)?)|([a-z]+)|([,;\n|\/])/g, m, src = String(txt || '').toLowerCase();
+  while ((m = re.exec(src))) {
+    if (m[1]) toks.push({ t: 'n', v: parseFloat(m[1]) });
+    else if (m[2] && LBL[m[2]]) toks.push({ t: 'l', k: LBL[m[2]] });
+    else if (m[3]) toks.push({ t: 'b' });
+  }
+  function run(prefixFirst) {
+    var used = {}, out = {}, pairs = 0;
+    function nb(i, dir) { var j = i + dir; return (j >= 0 && j < toks.length && toks[j].t === 'n' && !used[j]) ? j : -1; }
+    toks.forEach(function (tk, i) {
+      if (tk.t !== 'l' || out[tk.k] != null) return;
+      var a = nb(i, 1), b = nb(i, -1), j = prefixFirst ? (a >= 0 ? a : b) : (b >= 0 ? b : a);
+      if (j >= 0) { used[j] = 1; out[tk.k] = toks[j].v; pairs++; }
+    });
+    return { out: out, pairs: pairs };
+  }
+  var A = run(true), B = run(false), out = (B.pairs > A.pairs ? B : A).out;
+  if (out.kcal == null && out.kj != null) out.kcal = Math.round(out.kj / 4.184);
+  delete out.kj;
+  return out;
+}
+
+// Scale an ingredient quantity string by factor f (portion ÷ servings).
+var FR = { '½': .5, '¼': .25, '¾': .75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': .125 };
+function numOf(tok) {
+  var m = tok.match(/^(\d+(?:\.\d+)?)?([½¼¾⅓⅔⅛])?$/); if (!m || (!m[1] && !m[2])) return null;
+  return (m[1] ? parseFloat(m[1]) : 0) + (m[2] ? FR[m[2]] : 0);
+}
+function fracFmt(v) {
+  var q = Math.round(v * 4) / 4; if (q === 0) return '⅛';
+  var w = Math.floor(q), r = q - w, sym = { 0.25: '¼', 0.5: '½', 0.75: '¾' }[r] || '';
+  return (w ? String(w) : '') + sym;
+}
+function metricFmt(v, unit) {
+  if (unit === 'g' && v >= 1000) return (Math.round(v / 100) / 10) + ' kg';
+  if (unit === 'mL' && v >= 1000) return (Math.round(v / 100) / 10) + ' L';
+  var r = v >= 100 ? Math.round(v / 5) * 5 : v >= 10 ? Math.round(v) : Math.round(v * 10) / 10;
+  return r + ' ' + unit;
+}
+function scaleQty(q, f) {
+  var s = String(q || '').replace(/\s*\([^)]*\)/g, '').trim();
+  if (!s) return '';
+  var m = s.match(/^(\d+(?:\.\d+)?)\s*×\s*(\d+(?:\.\d+)?)\s*(kg|g|mL|L)\b/);
+  if (m) { var u = m[3], v = parseFloat(m[1]) * parseFloat(m[2]) * f; if (u === 'kg') { u = 'g'; v *= 1000; } if (u === 'L') { u = 'mL'; v *= 1000; } return metricFmt(v, u); }
+  m = s.match(/^([\d.½¼¾⅓⅔⅛]+)(?:\s*[–-]\s*([\d.½¼¾⅓⅔⅛]+))?\s*(.*)$/);
+  if (!m || numOf(m[1]) == null) return s.toLowerCase();
+  var a = numOf(m[1]) * f, b = m[2] && numOf(m[2]) != null ? numOf(m[2]) * f : null, rest = m[3].trim();
+  var um = rest.match(/^(kg|g|mL|L)\b/);
+  if (um) {
+    var unit = um[1], k = 1; if (unit === 'kg') { unit = 'g'; k = 1000; } if (unit === 'L') { unit = 'mL'; k = 1000; }
+    return b != null ? metricFmt(a * k, unit).split(' ')[0] + '–' + metricFmt(b * k, unit) : metricFmt(a * k, unit);
+  }
+  return (b != null ? fracFmt(a) + '–' + fracFmt(b) : fracFmt(a)) + (rest ? ' ' + rest : '');
+}
+
+
+</script>
+<script>
+(function () {
+  var DATA = JSON.parse(document.getElementById('recipe-data').textContent);
+  var R = DATA.recipes, byId = {}; R.forEach(function (r) { byId[r.id] = r; });
+  var KEY = 'recompPlanner.v1';
+  var EXAMPLE = { kcal: 2600, p: 190, c: 300, f: 75, fib: null };
+  var S = { T: null, n: 4, locks: [], res: null, idx: 0, items: [], edited: false };
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function r0(x) { return Math.round(x); }
+  function sgn(x, u) { var v = Math.round(x); return (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v) + (u || ''); }
+
+  function load() { try { var v = JSON.parse(localStorage.getItem(KEY) || 'null'); return v && v.T ? v : null; } catch (e) { return null; } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ T: S.T, n: S.n, locks: S.locks })); } catch (e) {} }
+
+  function setFields(T) {
+    ['kcal', 'p', 'c', 'f', 'fib'].forEach(function (k) { $('t-' + k).value = T[k] != null ? T[k] : ''; });
+    kjNote();
+  }
+  function readFields() {
+    var T = {}; ['kcal', 'p', 'c', 'f', 'fib'].forEach(function (k) { var v = parseFloat($('t-' + k).value); T[k] = isFinite(v) && v > 0 ? v : null; });
+    return T;
+  }
+  function kjNote() { var v = parseFloat($('t-kcal').value); $('kj').textContent = isFinite(v) && v > 0 ? '≈ ' + Math.round(v * 4.184) + ' kJ · ±5%' : '±5%'; }
+
+  function renderSeg() {
+    $('mealseg').innerHTML = [3, 4, 5, 6].map(function (n) { return '<button type="button" aria-pressed="' + (n === S.n) + '" data-n="' + n + '">' + n + '</button>'; }).join('');
+  }
+  function renderLocks() {
+    var slots = LAYOUT[S.n];
+    while (S.locks.length < slots.length) S.locks.push({ id: '', m: null });
+    S.locks.length = slots.length;
+    $('locks').innerHTML = slots.map(function (type, i) {
+      var L = S.locks[i] || {}, opts = R.filter(function (r) { return r.types.indexOf(type) >= 0; })
+        .sort(function (a, b) { return a.name.localeCompare(b.name); })
+        .map(function (r) { return '<option value="' + r.id + '"' + (L.id === r.id ? ' selected' : '') + '>' + esc(r.name) + '</option>'; }).join('');
+      var por = '<option value="">Auto</option>' + STEPS.map(function (s) { return '<option value="' + s + '"' + (L.m === s ? ' selected' : '') + '>' + s + '×</option>'; }).join('');
+      return '<div class="lockrow"><label class="slot" for="lk-' + i + '">' + type + '</label>' +
+        '<select id="lk-' + i + '" data-i="' + i + '" data-k="id"><option value="">Auto</option>' + opts + '</select>' +
+        '<select id="lp-' + i + '" data-i="' + i + '" data-k="m" aria-label="' + type + ' portion">' + por + '</select></div>';
+    }).join('');
+  }
+
+  function plan(keepIdx) {
+    var T = readFields();
+    if (!T.kcal || !T.p || !T.c || !T.f) {
+      $('verdict').innerHTML = '<div class="verdict bad"><b>Targets needed</b><span>Enter kcal, protein, carbs and fat (fibre is optional), or paste them above.</span></div>';
+      return;
+    }
+    S.T = T; if ($('examplechip').hidden) save();
+    $('results').classList.add('busy');
+    setTimeout(function () {
+      S.res = buildPlans(R, T, S.n, S.locks);
+      S.idx = keepIdx ? S.idx % S.res.plans.length : 0;
+      useCurrent();
+      $('results').classList.remove('busy');
+    }, 20);
+  }
+  function useCurrent() {
+    var p = S.res.plans[S.idx];
+    S.items = p.items.map(function (x) { return Object.assign({}, x); });
+    S.edited = false; render();
+  }
+
+  function render() {
+    var T = S.T, t = totals(S.items), valid = isValid(t, T), tl = tol(T);
+    // verdict
+    var v = '';
+    var misses = ['p', 'kcal', 'c', 'f'].filter(function (k) { return macroStatus(k, t[k], T) !== 'ok'; }).map(function (k) {
+      var name = { p: 'Protein', kcal: 'Energy', c: 'Carbs', f: 'Fat' }[k], u = k === 'kcal' ? ' kcal' : ' g';
+      var lim = k === 'p' ? '±5 g' : k === 'kcal' ? '±5%' : '±10%';
+      return '<li>' + name + ': ' + r0(t[k]) + u + ' vs ' + T[k] + u + ' (' + sgn(t[k] - T[k], u.trim() === 'g' ? ' g' : ' kcal') + ', allowed ' + lim + ')</li>';
+    });
+    if (S.edited) {
+      v = '<div class="verdict edit"><b>' + (valid ? 'Edited plan · on target' : 'Edited plan · off target') + '</b>' +
+        (misses.length ? '<ul>' + misses.join('') + '</ul>' : '') + '<span class="meta">Regenerate or Build plan to return to the planner\'s options.</span></div>';
+    } else if (!S.res.feasible) {
+      v = '<div class="verdict bad"><b>These targets can\'t be met with your current recipes</b>' +
+        '<span>No combination of your ' + R.length + ' recipes at 0.5×–2× portions lands every macro inside tolerance. This is the closest plan:</span>' +
+        '<ul>' + misses.join('') + '</ul></div>';
+    } else {
+      v = '<div class="verdict ok"><b>On target</b><span class="meta">Protein within ±5 g, energy within ±5%, carbs and fat within ±10%. ' +
+        S.res.plans.length + ' valid combination' + (S.res.plans.length === 1 ? '' : 's') + ' found.</span></div>';
+    }
+    $('verdict').innerHTML = v;
+    $('planmeta').textContent = S.edited ? 'Edited by hand' : (S.res.feasible ? 'Option ' : 'Closest option ') + (S.idx + 1) + ' of ' + S.res.plans.length;
+    $('totmeta').textContent = S.items.length + ' meals · ' + Math.round(t.kcal * 4.184) + ' kJ';
+    // totals table
+    var rows = [['Energy', 'kcal', ' kcal', '±' + Math.round(tl.kcal)], ['Protein', 'p', ' g', '±5'], ['Carbs', 'c', ' g', '±' + Math.round(tl.c)], ['Fat', 'f', ' g', '±' + Math.round(tl.f)], ['Fibre', 'fib', ' g', T.fib ? '≥' + Math.round(T.fib - tl.fib) : '']];
+    $('tot').innerHTML = '<thead><tr><th>Per day</th><th>Plan</th><th>Target</th><th>Δ</th><th>Tolerance</th><th>Status</th></tr></thead><tbody>' +
+      rows.map(function (x) {
+        var k = x[1], st = macroStatus(k, t[k], T);
+        var label = { ok: 'Within', over: 'Over', under: 'Under', na: 'No target' }[st];
+        return '<tr><td>' + x[0] + '</td><td>' + r0(t[k]) + x[2] + '</td><td>' + (T[k] ? T[k] + x[2] : '—') + '</td>' +
+          '<td class="d ' + st + '">' + (T[k] ? sgn(t[k] - T[k]) : '—') + '</td><td class="tl">' + (x[3] || '—') + '</td>' +
+          '<td><span class="pill ' + st + '">' + label + '</span></td></tr>';
+      }).join('') + '</tbody>';
+    // meals
+    $('meals').innerHTML = S.items.map(function (x, i) {
+      var r = x.r, m = x.m, lockedNote = x.recipeLocked ? '<span class="chip">Locked</span>' : '';
+      return '<article class="meal' + (x.recipeLocked ? ' locked' : '') + '">' +
+        '<div class="eyebrow"><span>' + esc(x.slot) + '</span>' + lockedNote + '</div>' +
+        '<h3>' + esc(r.name) + '</h3>' +
+        '<div class="row"><div class="stepper"><button type="button" data-step="-1" data-i="' + i + '" aria-label="Smaller portion"' + (m <= 0.5 ? ' disabled' : '') + '>−</button>' +
+        '<output>' + m + '×</output><button type="button" data-step="1" data-i="' + i + '" aria-label="Larger portion"' + (m >= 2 ? ' disabled' : '') + '>+</button></div>' +
+        (!S.edited && x.slot !== 'extra snack' && !x.recipeLocked ? '<button class="linkbtn" type="button" data-lock="' + i + '">Lock this</button>' : '') + '</div>' +
+        '<div class="macros">' + [['kcal', 'kcal'], ['p', 'P g'], ['c', 'C g'], ['f', 'F g'], ['fib', 'Fib g']].map(function (k) {
+          return '<div><b>' + r0((r[k[0]] || 0) * m) + '</b><small>' + k[1] + '</small></div>';
+        }).join('') + '</div>' +
+        '<div class="src">1 serve = ' + r.kcal + ' kcal · ' + r.p + ' g P · recipe makes ' + r.serv + ' · ' + esc(r.file) + '</div></article>';
+    }).join('');
+    // suggestions
+    var sg = suggest(R, T, S.items); S.sugs = sg;
+    if (!sg.length) {
+      $('sugs').innerHTML = '<div class="empty">' + (valid
+        ? 'Nothing to change. No single add, remove, swap or portion step gets this plan closer to target.'
+        : 'No single change gets closer. This is as near as your recipes can get with one step; try a different meal count or unlock a slot.') + '</div>';
+    } else {
+      $('sugs').innerHTML = sg.map(function (s, i) {
+        var eff = [['p', ' g P'], ['kcal', ' kcal'], ['c', ' g C'], ['f', ' g F']].map(function (k) {
+          var vv = Math.round(s.d[k[0]]); return vv ? '<span>' + sgn(vv) + k[1] + '</span>' : '';
+        }).join('');
+        var pct = Math.round(s.pct * 100);
+        var note = s.trade ? '<div class="note warn">Trade-off: closes ' + pct + '% of the overall gap but moves ' + s.worse.map(function (k) { return { p: 'protein', kcal: 'energy', c: 'carbs', f: 'fat' }[k]; }).join(', ') + ' further from target.</div>'
+          : '<div class="note">' + (pct > 0 ? 'Closes ' + pct + '% of the gap' : 'Fine-tune: moves totals closer inside tolerance') + '</div>';
+        return '<div class="sug"><div class="rank">' + (i + 1) + '</div><div><div class="txt">' + esc(s.text) + '</div><div class="eff">' + eff + '</div>' + note +
+          (pct > 0 ? '<div class="bar"><i style="width:' + Math.min(100, pct) + '%"></i></div>' : '') +
+          '</div><button class="btn small" type="button" data-apply="' + i + '">Apply</button></div>';
+      }).join('');
+    }
+    // shopping
+    var withIng = S.items.filter(function (x) { return x.r.ing && x.r.ing.length; });
+    $('shopwrap').hidden = !withIng.length;
+    $('shop').innerHTML = withIng.map(function (x) {
+      var f = x.m / x.r.serv;
+      return '<details class="rec"><summary>' + esc(x.r.name) + '<small>' + x.m + ' serve' + (x.m === 1 ? '' : 's') + ' of ' + x.r.serv + '</small></summary><ul>' +
+        x.r.ing.map(function (g) { return '<li><span class="q">' + esc(scaleQty(g[0], f) || '—') + '</span><span>' + esc(g[1]) + '</span></li>'; }).join('') + '</ul></details>';
+    }).join('');
+  }
+
+  function applySug(s) {
+    var a = s.apply;
+    if (a.op === 'portion') S.items[a.i].m = a.m;
+    else if (a.op === 'swap') { S.items[a.i].r = byId[a.id]; S.items[a.i].m = a.m; }
+    else if (a.op === 'remove') S.items.splice(a.i, 1);
+    else if (a.op === 'add') S.items.push({ slot: 'extra snack', r: byId[a.id], m: a.m, recipeLocked: false, portionLocked: false });
+    S.edited = true; render();
+  }
+
+  // events
+  $('readpaste').addEventListener('click', function () {
+    var got = parseTargets($('paste').value), keys = Object.keys(got);
+    if (!keys.length) { $('pastemsg').textContent = 'No numbers found. Try "2450 kcal, P 190, C 260, F 70".'; return; }
+    var cur = readFields(); keys.forEach(function (k) { cur[k] = got[k]; });
+    if (got.fib == null) cur.fib = null;
+    setFields(cur); $('examplechip').hidden = true;
+    var need = ['kcal', 'p', 'c', 'f'].filter(function (k) { return got[k] == null; });
+    $('pastemsg').textContent = 'Read ' + keys.length + ' value' + (keys.length > 1 ? 's' : '') + (need.length ? '. Still need: ' + need.join(', ') : '');
+    plan(false);
+  });
+  $('paste').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('readpaste').click(); } });
+  var deb;
+  ['kcal', 'p', 'c', 'f', 'fib'].forEach(function (k) {
+    $('t-' + k).addEventListener('input', function () { kjNote(); $('examplechip').hidden = true; clearTimeout(deb); deb = setTimeout(function () { plan(false); }, 600); });
+  });
+  $('mealseg').addEventListener('click', function (e) {
+    var n = +e.target.getAttribute('data-n'); if (!n || n === S.n) return;
+    S.n = n; S.locks = []; renderSeg(); renderLocks(); plan(false);
+  });
+  $('locks').addEventListener('change', function (e) {
+    var i = +e.target.getAttribute('data-i'), k = e.target.getAttribute('data-k');
+    S.locks[i][k] = k === 'm' ? (e.target.value ? parseFloat(e.target.value) : null) : e.target.value;
+    plan(false);
+  });
+  $('build').addEventListener('click', function () { plan(false); });
+  $('regen').addEventListener('click', function () {
+    if (!S.res) return plan(false);
+    if (S.edited) { useCurrent(); return; }
+    S.idx = (S.idx + 1) % S.res.plans.length; useCurrent();
+  });
+  $('meals').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var i = +b.getAttribute('data-i');
+    if (b.hasAttribute('data-step')) {
+      var x = S.items[i]; x.m = Math.min(2, Math.max(0.5, x.m + 0.25 * +b.getAttribute('data-step')));
+      S.edited = true; render();
+    } else if (b.hasAttribute('data-lock')) {
+      var j = +b.getAttribute('data-lock'), it = S.items[j], slots = LAYOUT[S.n];
+      var si = slots.indexOf(it.slot) >= 0 ? j : -1;
+      if (si >= 0 && si < slots.length) { S.locks[si] = { id: it.r.id, m: it.m }; renderLocks(); plan(false); }
+    }
+  });
+  $('sugs').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-apply]'); if (b) applySug(S.sugs[+b.getAttribute('data-apply')]);
+  });
+
+  // boot
+  var ex = DATA.excluded || [];
+  $('libmeta').textContent = R.length + ' recipes (' + ['breakfast', 'lunch', 'dinner', 'snack'].map(function (t) {
+    return R.filter(function (r) { return r.types.indexOf(t) >= 0; }).length + ' ' + t;
+  }).join(', ') + ')';
+  $('foot').innerHTML = 'Recipe data parsed ' + esc(DATA.builtAt) + ' from ' + DATA.parsed + ' files in Recipe Creator. ' +
+    (ex.length ? 'Excluded – missing macros: ' + ex.map(function (x) { return esc(x.name); }).join(', ') + '.' : 'Excluded – missing macros: none.') +
+    (R.some(function (r) { return r.inf; }) ? ' Meal type inferred for: ' + R.filter(function (r) { return r.inf; }).map(function (r) { return esc(r.name); }).join(', ') + '.' : '') +
+    ' All planning runs in this page; nothing is sent anywhere.';
+  var saved = load();
+  if (saved) { S.n = LAYOUT[saved.n] ? saved.n : 4; S.locks = (saved.locks || []).map(function (l) { return { id: l && byId[l.id] ? l.id : '', m: l && l.m || null }; }); setFields(saved.T); }
+  else { setFields(EXAMPLE); $('examplechip').hidden = false; }
+  renderSeg(); renderLocks(); plan(false);
+})();
+</script>
+
+</body></html>

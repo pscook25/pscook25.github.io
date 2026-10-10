@@ -1,0 +1,16 @@
+title: CookiesWiki
+description: Body recomp tools and recipes
+theme: jekyll-theme-cayman
+
+# Apply the theme to every Markdown file in /recipes
+# so you don't need front matter in each recipe.
+defaults:
+  - scope:
+      path: "recipes"
+    values:
+      layout: "default"
+
+# Keep the repo's own files out of the built site
+exclude:
+  - README.md
+  - LICENSE

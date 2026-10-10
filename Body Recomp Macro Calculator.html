@@ -1,0 +1,443 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Body Recomp Macro Calculator</title>
+<style>
+/* Layout: one narrow column — inputs panel (body, activity planner, macro sliders), then results (total → macro cards → split bar → workings). */
+:root{
+  --bg:#eef1f3; --panel:#ffffff; --ink:#18232b; --muted:#5b6b76; --line:#d5dde2;
+  --accent:#1f5f8b; --accent-ink:#ffffff;
+  --protein:#b23a48; --fat:#d08a1c; --carb:#2b8a6e;
+  --warn-bg:#fff3d6; --warn-ink:#7a4b00;
+  --font-ui:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-num:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11181d; --panel:#19232a; --ink:#e4ebef; --muted:#93a4ae; --line:#2c3a43;
+  --accent:#5aa7d8; --accent-ink:#0d1418;
+  --protein:#e0677a; --fat:#e8a943; --carb:#4cbf9a;
+  --warn-bg:#3a2e12; --warn-ink:#f3cf83; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11181d; --panel:#19232a; --ink:#e4ebef; --muted:#93a4ae; --line:#2c3a43;
+  --accent:#5aa7d8; --accent-ink:#0d1418;
+  --protein:#e0677a; --fat:#e8a943; --carb:#4cbf9a;
+  --warn-bg:#3a2e12; --warn-ink:#f3cf83; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.acts .seg{flex-wrap:nowrap}
+.acts .seg button{padding:7px 10px;font-size:.8rem;white-space:nowrap}
+@media (max-width:480px){.acts .seg{width:100%}.acts .seg button{flex:1;padding:7px 4px}}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.45}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:grid;gap:16px}
+h1{font-size:1.45rem;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.sub{margin:4px 0 0;color:var(--muted);font-size:.9rem}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+label,.lbl{display:block;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}
+input[type=number],select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--bg);color:var(--ink);font:inherit;font-size:.85rem;padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.topbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
+.slider{display:grid;gap:4px}
+.slider .head{display:flex;justify-content:space-between;align-items:baseline}
+.slider .head span{font-family:var(--font-num);font-size:.85rem}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.hint{font-size:.8rem;color:var(--muted);margin:0}
+
+/* Activity planner */
+.acts{display:grid;gap:12px;border-top:1px solid var(--line);padding-top:14px}
+.acts h2{font-size:.95rem;margin:0}
+.alist{display:grid;gap:6px}
+.arow{display:grid;grid-template-columns:64px minmax(0,1fr) 120px;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.arow.off{opacity:.62}
+.arow .ctl{display:flex;justify-content:center}
+.arow input[type=checkbox]{width:22px;height:22px;accent-color:var(--accent);cursor:pointer}
+.arow .ctl input[type=number]{padding:7px 6px;text-align:center;background:var(--panel)}
+.arow .nm{min-width:0}
+.arow .nm strong{display:block;font-size:.92rem;font-weight:600}
+.arow .nm span{font-family:var(--font-num);font-size:.76rem;color:var(--muted)}
+.arow .opts{grid-column:2/4;display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px;align-items:center}
+.arow .opts select{padding:6px 8px;font-size:.82rem;background:var(--panel);width:100%;min-width:0}
+.arow .opts .kj{display:flex;align-items:center;gap:6px;min-width:0}
+.arow .opts .kj input{padding:6px 8px;font-size:.85rem;background:var(--panel);min-width:0;flex:1}
+.arow .opts .kj em{font-style:normal;font-size:.78rem;color:var(--muted);white-space:nowrap}
+.arow.watch .amt,.arow.watch .opts select{opacity:.45}
+.amt{display:flex;align-items:center;gap:6px}
+.amt input{padding:7px 8px;background:var(--panel)}
+.amt em{font-style:normal;font-size:.8rem;color:var(--muted);min-width:24px}
+.restrow{display:flex;gap:10px;align-items:center;text-transform:none;letter-spacing:0;font-size:.92rem;font-weight:400;color:var(--ink);margin:0 0 10px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;cursor:pointer}
+.restrow input{width:22px;height:22px;accent-color:var(--accent);flex:none;margin:0 11px}
+.restrow .hint{display:inline}
+.colhead{display:grid;grid-template-columns:64px minmax(0,1fr) 120px;gap:10px;padding:0 10px;font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.colhead span:first-child{text-align:center}
+
+.total{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.total .big{font-family:var(--font-num);font-size:2.4rem;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.total .big small{font-size:1rem;font-weight:500;color:var(--muted);margin-left:4px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.card{border:1px solid var(--line);border-top:4px solid var(--c);border-radius:8px;padding:10px 12px;min-width:0}
+.card .name{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--c)}
+.card .g{font-family:var(--font-num);font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums}
+.card .g small{font-size:.85rem;font-weight:500;color:var(--muted)}
+.card .meta{font-family:var(--font-num);font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar{display:flex;height:30px;border-radius:6px;overflow:hidden;background:var(--line)}
+.bar div{background:var(--c);color:#fff;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;transition:width .25s}
+@media (prefers-reduced-motion:reduce){.bar div{transition:none}}
+.warn{background:var(--warn-bg);color:var(--warn-ink);border-radius:6px;padding:8px 12px;font-size:.85rem;margin:0}
+.compare{border:1px dashed var(--line);border-radius:8px;padding:10px 12px;font-size:.88rem}
+.how h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 6px}
+.how ol{margin:0;padding-left:20px;display:grid;gap:4px;font-family:var(--font-num);font-size:.8rem;font-variant-numeric:tabular-nums}
+.how ol li{overflow-wrap:anywhere}
+.note{font-size:.82rem;color:var(--muted);margin:0}
+@media (max-width:480px){
+  .arow .opts{grid-column:1/-1;grid-template-columns:minmax(0,1fr) 128px}
+  .cards{grid-template-columns:1fr}
+  .card{display:grid;grid-template-columns:1fr auto;align-items:center;gap:0 10px}
+  .card .meta{grid-column:1/-1}
+  .arow,.colhead{grid-template-columns:52px minmax(0,1fr) 96px;gap:8px}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Body Recomp Macro Calculator</h1>
+    <p class="sub">Daily protein, fat and carb targets anchored to your target body weight, for losing fat while building muscle.</p>
+  </header>
+
+  <section class="panel" aria-label="Your details">
+    <div class="topbar">
+      <div class="seg" role="group" aria-label="Units">
+        <button type="button" id="u-kg" aria-pressed="true">kg / cm</button>
+        <button type="button" id="u-lb" aria-pressed="false">lb / ft-in</button>
+      </div>
+      <div class="seg" role="group" aria-label="Sex">
+        <button type="button" id="s-m" aria-pressed="true">Male</button>
+        <button type="button" id="s-f" aria-pressed="false">Female</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div><label for="wc">Current weight (<span class="wu">kg</span>)</label><input type="number" id="wc" value="76" min="30" step="0.1" inputmode="decimal"></div>
+      <div><label for="wt">Target weight (<span class="wu">kg</span>)</label><input type="number" id="wt" value="75" min="30" step="0.1" inputmode="decimal"></div>
+      <div id="h-cm-box"><label for="hcm">Height (cm)</label><input type="number" id="hcm" value="175" min="120" max="230" step="0.5" inputmode="decimal"></div>
+      <div id="h-ft-box" hidden><span class="lbl">Height (ft / in)</span>
+        <div class="row2"><input type="number" id="hft" aria-label="Feet" min="4" max="7" step="1" inputmode="numeric"><input type="number" id="hin" aria-label="Inches" min="0" max="11.9" step="0.5" inputmode="decimal"></div></div>
+      <div><label for="age">Age</label><input type="number" id="age" value="42" min="15" max="90" step="1" inputmode="numeric"></div>
+      <div><label for="bf">Body fat % (optional)</label><input type="number" id="bf" placeholder="e.g. 22" min="3" max="60" step="0.5" inputmode="decimal"></div>
+    </div>
+
+    <div>
+      <label for="appr">Recomp approach</label>
+      <select id="appr">
+        <option value="0">Maintenance (target close to current)</option>
+        <option value="0.10" selected>Mild deficit (−10%)</option>
+        <option value="0.20">Moderate deficit (−20%)</option>
+      </select>
+    </div>
+    <p class="warn" id="appr-hint" hidden></p>
+
+    <div class="acts">
+      <div class="topbar">
+        <h2>Activity</h2>
+        <div class="seg" role="group" aria-label="Activity mode">
+          <button type="button" id="m-day" aria-pressed="true">Plan today</button>
+          <button type="button" id="m-week" aria-pressed="false">Plan my week</button>
+          <button type="button" id="m-quick" aria-pressed="false">Quick estimate</button>
+        </div>
+      </div>
+      <p class="hint" id="mode-hint"></p>
+
+      <div id="act-quick" hidden>
+        <label for="act">Activity level</label>
+        <select id="act">
+          <option value="1.2">Sedentary</option>
+          <option value="1.375">Light (1–3 sessions/wk)</option>
+          <option value="1.55" selected>Moderate (3–5 sessions/wk)</option>
+          <option value="1.725">Very active (6–7 sessions/wk)</option>
+          <option value="1.9">Athlete (2× per day)</option>
+        </select>
+      </div>
+
+      <div id="act-plan">
+        <label class="restrow" id="rest-row" for="rest"><input type="checkbox" id="rest"><span><strong>Rest day</strong> <span class="hint">Turns off training. Walking still counts.</span></span></label>
+        <div class="colhead"><span id="col1">Today</span><span>Activity</span><span>Each session</span></div>
+        <div class="alist" id="alist"></div>
+        <p class="hint" style="margin-top:8px">Pick an intensity, or type the workout's <strong>Active kJ</strong> from your Apple Watch to use that instead. Use Active, not Total: your baseline already covers the resting part. Without a watch figure, each session is (MET − 1) × target weight × hours; count only the minutes you're actually moving or playing.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="slider"><div class="head"><label for="pk">Protein</label><span id="pk-v"></span></div>
+        <input type="range" id="pk" min="1.6" max="2.4" step="0.1" value="2.0">
+        <p class="hint">Set from your target weight, so it stays the same whatever your activity.</p></div>
+      <div class="slider"><div class="head"><label for="fk">Fat</label><span id="fk-v"></span></div>
+        <input type="range" id="fk" min="0.6" max="1.2" step="0.1" value="0.8">
+        <p class="hint">Set from your target weight. Goes up only on big days, to stay at 20% or more of calories.</p></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Results" aria-live="polite">
+    <div class="total">
+      <div>
+        <span class="lbl" id="tot-lbl">Today's target</span>
+        <div class="big"><span id="tot">–</span><small>kcal</small></div>
+      </div>
+      <div class="seg" role="group" aria-label="Day type" id="daytype" hidden>
+        <button type="button" id="d-train" aria-pressed="true">Training day</button>
+        <button type="button" id="d-rest" aria-pressed="false">Rest day</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card" style="--c:var(--protein)"><div class="name">Protein</div><div class="g"><span id="p-g"></span><small> g</small></div><div class="meta" id="p-m"></div></div>
+      <div class="card" style="--c:var(--fat)"><div class="name">Fat</div><div class="g"><span id="f-g"></span><small> g</small></div><div class="meta" id="f-m"></div></div>
+      <div class="card" style="--c:var(--carb)"><div class="name">Carbs</div><div class="g"><span id="c-g"></span><small> g</small></div><div class="meta" id="c-m"></div></div>
+    </div>
+
+    <div class="bar" role="img" id="bar" aria-label="Macro split">
+      <div id="b-p" style="--c:var(--protein)"></div><div id="b-f" style="--c:var(--fat)"></div><div id="b-c" style="--c:var(--carb)"></div>
+    </div>
+
+    <div id="warns" style="display:grid;gap:8px"></div>
+    <p class="compare" id="restnote" style="margin:0" hidden></p>
+    <div class="compare" id="lbm" hidden></div>
+
+    <div class="how">
+      <h2>How this was calculated</h2>
+      <ol id="how"></ol>
+    </div>
+    <p class="note">These are estimates. Review every 2–4 weeks against your weight, waist measurement and gym performance.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const LB = 2.20462, MI = 1.60934, WALK_KMH = 5;
+  const st = { unit:'kg', sex:'m', day:'train', mode:'day' };
+  const r5 = x => Math.round(x/5)*5;
+  const c5 = x => Math.ceil(x/5)*5;
+  const r10 = x => Math.round(x/10)*10;
+  const fmt = (x,d=0) => Number(x).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const num = id => { const v = parseFloat($(id).value); return isFinite(v) ? v : NaN; };
+
+  // Activities: MET values from the Compendium of Physical Activities (class/social averages).
+  // Each level: label, MET, and for walking the pace in km/h used to turn distance into time.
+  const ACTS = [
+    {id:'cf',   name:'CrossFit class',   dist:false, amt:60, day:true,  wk:4, lv:[['Light',4.5],['Moderate',6],['Hard',8]]},
+    {id:'walk', name:'Walking',          dist:true,  amt:4,  day:true,  wk:7, lv:[['Easy · 15 min/km',3.0,60/15],['Brisk · 12 min/km',3.5,60/12],['Fast · 9 min/km',5.0,60/9]]},
+    {id:'soc',  name:'5-a-side soccer',  dist:false, amt:90, day:false, wk:1, lv:[['Light',5],['Moderate',7],['Hard',9]]},
+    {id:'ult',  name:'Ultimate frisbee', dist:false, amt:60, day:false, wk:0, lv:[['Light',5],['Moderate',7],['Hard',8]]},
+    {id:'oth',  name:'Other activity',   dist:false, amt:45, day:false, wk:0, lv:[['Light',4],['Moderate',6],['Hard',8]]}
+  ];
+
+  $('alist').innerHTML = ACTS.map(a => `
+    <div class="arow" id="row-${a.id}">
+      <div class="ctl">
+        <input type="checkbox" id="on-${a.id}" ${a.day?'checked':''} aria-label="Doing ${a.name} today">
+        <input type="number" id="wk-${a.id}" value="${a.wk}" min="0" max="21" step="1" inputmode="numeric" aria-label="${a.name} sessions per week" hidden>
+      </div>
+      <div class="nm"><strong>${a.name}</strong><span id="kc-${a.id}"></span></div>
+      <div class="amt"><input type="number" id="amt-${a.id}" value="${a.amt}" min="0" step="${a.dist?0.5:5}" inputmode="decimal" aria-label="${a.name} ${a.dist?'distance':'minutes'}"><em class="${a.dist?'du':''}">${a.dist?'km':'min'}</em></div>
+      <div class="opts">
+        <select id="int-${a.id}" aria-label="${a.name} intensity">${a.lv.map((l,i)=>`<option value="${i}" ${i===1?'selected':''}>${l[0]}</option>`).join('')}</select>
+        <span class="kj"><input type="number" id="kj-${a.id}" min="0" step="10" inputmode="decimal" placeholder="—" aria-label="${a.name} Active kJ from watch"><em>Active kJ</em></span>
+      </div>
+    </div>`).join('');
+
+  function heightCm(){
+    if (st.unit==='kg') return num('hcm');
+    return ((num('hft')||0)*12 + (num('hin')||0)) * 2.54;
+  }
+  const toKg = v => st.unit==='kg' ? v : v/LB;
+  function setPressed(ids, onId){ ids.forEach(i => $(i).setAttribute('aria-pressed', i===onId)); }
+
+  function setUnit(u){
+    if (u===st.unit) return;
+    const h = heightCm(), wc = num('wc'), wt = num('wt');
+    const conv = v => isFinite(v) ? Math.round((u==='lb' ? v*LB : v/LB)*10)/10 : '';
+    $('wc').value = conv(wc); $('wt').value = conv(wt);
+    ACTS.filter(a=>a.dist).forEach(a=>{ const v = num('amt-'+a.id); if (isFinite(v)) $('amt-'+a.id).value = Math.round((u==='lb' ? v/MI : v*MI)*10)/10; });
+    st.unit = u;
+    if (u==='lb'){ const ti = h/2.54; let ft = Math.floor(ti/12), inch = Math.round((ti-ft*12)*2)/2; if(inch>=12){ft++;inch=0;} $('hft').value=ft; $('hin').value=inch; }
+    else { $('hcm').value = Math.round(h*2)/2; }
+    $('h-cm-box').hidden = u!=='kg'; $('h-ft-box').hidden = u==='kg';
+    document.querySelectorAll('.wu').forEach(e=>e.textContent=u);
+    document.querySelectorAll('.du').forEach(e=>e.textContent=u==='kg'?'km':'mi');
+    setPressed(['u-kg','u-lb'], u==='kg'?'u-kg':'u-lb');
+    calc();
+  }
+
+  function setMode(m){
+    st.mode = m;
+    setPressed(['m-day','m-week','m-quick'], 'm-'+m);
+    $('act-quick').hidden = m!=='quick';
+    $('act-plan').hidden = m==='quick';
+    $('daytype').hidden = m!=='quick';
+    $('col1').textContent = m==='week' ? 'Per week' : 'Today';
+    ACTS.forEach(a=>{ $('on-'+a.id).hidden = m!=='day'; $('wk-'+a.id).hidden = m!=='week'; });
+    $('rest-row').hidden = m!=='day';
+    $('mode-hint').textContent = {
+      day:'Tick what you are doing today. Your calories and carbs rise and fall with the day; protein and fat stay the same.',
+      week:'Enter sessions per week. You get one daily average, so you eat about the same every day.',
+      quick:'Uses one activity multiplier for the whole week.'
+    }[m];
+    calc();
+  }
+
+  // Net kcal for one session at the given body weight (kg)
+  // Uses the watch's Active kJ when entered (kJ ÷ 4.184 = kcal), otherwise the chosen intensity's MET.
+  const watchKj = a => { const v = num('kj-'+a.id); return v>0 ? v : 0; };
+  const level = a => a.lv[parseInt($('int-'+a.id).value,10)] || a.lv[1];
+  function sessionKcal(a, w){
+    const kj = watchKj(a);
+    if (kj) return kj/4.184;
+    const [, met, kmh] = level(a);
+    const amt = Math.max(0, num('amt-'+a.id) || 0);
+    const hrs = a.dist ? (st.unit==='kg' ? amt : amt*MI) / (kmh||WALK_KMH) : amt/60;
+    return Math.max(0, (met-1) * w * hrs);
+  }
+
+  function activity(wT){
+    let total = 0; const parts = [], ids = [];
+    ACTS.forEach(a=>{
+      const k = sessionKcal(a, wT), w = watchKj(a) > 0;
+      const src = w ? ' · from watch' : ' · MET '+level(a)[1];
+      $('row-'+a.id).classList.toggle('watch', w);
+      let used = 0, on = false;
+      if (st.mode==='day'){ on = $('on-'+a.id).checked; used = on ? k : 0; $('kc-'+a.id).textContent = '≈ '+fmt(r10(k))+' kcal'+src; }
+      else { const n = Math.max(0, Math.round(num('wk-'+a.id)||0)); on = n>0; used = n*k; $('kc-'+a.id).textContent = '≈ '+fmt(r10(k))+' kcal each'+src+(n?' · '+fmt(r10(n*k))+'/wk':''); }
+      $('row-'+a.id).classList.toggle('off', !on);
+      if (on) ids.push(a.id);
+      if (on) parts.push({name:a.name.replace(' class','')+(w?' (watch)':''), kcal:used});
+      total += used;
+    });
+    if (st.mode==='week') total /= 7;
+    return {total, parts, ids};
+  }
+
+  function calc(){
+    const wC = toKg(num('wc')), wT = toKg(num('wt')), h = heightCm(), age = num('age');
+    const male = st.sex==='m', def = parseFloat($('appr').value);
+    const pk = parseFloat($('pk').value), fk = parseFloat($('fk').value);
+    $('pk-v').textContent = fmt(pk,1)+' g/kg' + (st.unit==='lb' ? ' ('+fmt(pk/LB,2)+' g/lb)' : '');
+    $('fk-v').textContent = fmt(fk,1)+' g/kg' + (st.unit==='lb' ? ' ('+fmt(fk/LB,2)+' g/lb)' : '');
+
+    if (!(wC>25 && wT>25 && h>100 && age>=15)){
+      ['tot','p-g','f-g','c-g'].forEach(i=>$(i).textContent='–');
+      ['p-m','f-m','c-m'].forEach(i=>$(i).textContent='');
+      $('how').innerHTML=''; $('lbm').hidden=true; $('appr-hint').hidden=true;
+      $('warns').innerHTML='<p class="warn">Enter your weights, height and age (15+) to see your targets.</p>';
+      return;
+    }
+
+    const s = male ? 5 : -161, sTxt = male ? '+ 5' : '− 161';
+    const bmr = w => 10*w + 6.25*h - 5*age + s;
+    const bmrT = bmr(wT), bmrC = bmr(wC);
+
+    let tdee, maintLine, act = null;
+    if (st.mode==='quick'){
+      const mult = parseFloat($('act').value);
+      tdee = bmrT*mult;
+      maintLine = 'Maintenance = '+fmt(bmrT)+' × '+mult+' = '+fmt(tdee)+' kcal';
+    } else {
+      act = activity(wT); const base = bmrT*1.2;
+      tdee = base + act.total;
+      const detail = act.parts.length ? ' ('+act.parts.map(p=>p.name+' '+fmt(p.kcal)).join(', ')+(st.mode==='week'?' per week, ÷ 7':'')+')' : '';
+      maintLine = 'Maintenance = '+fmt(bmrT)+' × 1.2 = '+fmt(base)+' + activity '+fmt(act.total)+detail+' = '+fmt(tdee)+' kcal';
+    }
+
+    function plan(t){
+      let cal = t*(1-def), floored = false;
+      if (cal < bmrC){ cal = bmrC; floored = true; }
+      const calR = r10(cal), pG = r5(pk*wT), pK = pG*4;
+      let fG = r5(fk*wT), fatRaised = false;
+      if (fG*9 < 0.2*calR){ fG = c5(0.2*calR/9); fatRaised = true; }
+      const fK = fG*9;
+      let carbRaw = (calR - pK - fK)/4; if (carbRaw<0) carbRaw = 0;
+      return {floored, calR, pG, pK, fG, fK, fatRaised, carbRaw};
+    }
+    const {floored, calR, pG, pK, fG, fK, fatRaised, carbRaw} = plan(tdee);
+    const restDay = st.mode==='day' && act && !act.ids.some(i=>i!=='walk');
+    const rest = st.mode==='quick' && st.day==='rest';
+    const cG = r5(rest ? carbRaw*0.75 : carbRaw), cK = cG*4;
+    const sum = pK+fK+cK;
+    const total = rest ? r10(sum) : calR;
+    const pct = k => sum>0 ? Math.round(k/sum*100) : 0;
+
+    $('tot-lbl').textContent = st.mode==='day' ? (restDay ? "Today's target (rest day)" : "Today's target") : st.mode==='week' ? 'Daily target (weekly average)' : (rest ? 'Rest day target' : 'Training day target');
+    $('tot').textContent = fmt(total);
+    $('p-g').textContent = fmt(pG); $('f-g').textContent = fmt(fG); $('c-g').textContent = fmt(cG);
+    $('p-m').textContent = fmt(r10(pK))+' kcal · '+pct(pK)+'%';
+    $('f-m').textContent = fmt(r10(fK))+' kcal · '+pct(fK)+'%';
+    $('c-m').textContent = fmt(r10(cK))+' kcal · '+pct(cK)+'%';
+    [['b-p',pK,'P'],['b-f',fK,'F'],['b-c',cK,'C']].forEach(([id,k,l])=>{
+      const w = sum>0 ? k/sum*100 : 0; $(id).style.width = w+'%'; $(id).textContent = w>=9 ? l+' '+Math.round(w)+'%' : '';
+    });
+    $('bar').setAttribute('aria-label','Macro split: protein '+pct(pK)+'%, fat '+pct(fK)+'%, carbs '+pct(cK)+'%');
+
+    const warns = [];
+    if (floored) warns.push('The '+(def*100)+'% deficit would put you at '+fmt(r10(tdee*(1-def)))+' kcal, below your BMR at current weight ('+fmt(r10(bmrC))+' kcal). Calories have been held at that floor.');
+    if (fatRaised) warns.push('Fat was raised to '+fG+' g so it stays at or above 20% of total calories.');
+    if (cG < 50) warns.push('Carbs are below 50 g/day. That can blunt training quality; consider a smaller deficit or a lower protein or fat setting.');
+    $('warns').innerHTML = warns.map(w=>'<p class="warn">'+w+'</p>').join('');
+
+    const rn = $('restnote');
+    if (restDay){
+      const cf = ACTS[0], cfMin = Math.max(0, num('amt-cf')||0);
+      const ref = plan(tdee + sessionKcal(cf, wT)), refC = r5(ref.carbRaw), diff = refC - cG;
+      rn.hidden = false;
+      rn.innerHTML = '<strong>Rest day:</strong> '+cG+' g carbs, which is '+diff+' g ('+(refC?Math.round(diff/refC*100):0)+'%) less than the same day with a '+cfMin+'-min CrossFit class ('+refC+' g). The drop comes from burning less, so no extra 25% cut is applied.';
+    } else rn.hidden = true;
+
+    const gap = Math.abs(wC-wT)/wC, hint = $('appr-hint');
+    if (def===0 && gap>0.05){ hint.hidden=false; hint.textContent='Your target is '+Math.round(gap*100)+'% away from your current weight. Maintenance suits targets within about 5%; a mild deficit is usually a better fit.'; }
+    else hint.hidden = true;
+
+    const bf = num('bf');
+    if (bf>=3 && bf<=60){
+      const lbm = wC*(1-bf/100), lp = r5(2.5*lbm);
+      const u = st.unit==='kg' ? fmt(lbm,1)+' kg' : fmt(lbm*LB,1)+' lb';
+      $('lbm').hidden=false;
+      $('lbm').innerHTML='<strong>Lean-mass comparison:</strong> at '+fmt(bf,1)+'% body fat your lean mass is '+u+'. At 2.5 g per kg of lean mass (common range 2.3–3.1) that is about <strong>'+lp+' g protein</strong>, compared with '+pG+' g from your target weight.';
+    } else $('lbm').hidden = true;
+
+    const defTxt = def===0 ? 'no deficit' : '−'+(def*100)+'%';
+    const carbLine = 'Carbs = ('+fmt(calR)+' − '+pK+' − '+fK+') ÷ 4 = '+fmt(carbRaw,1)+' → '+r5(carbRaw)+' g' + (st.mode==='quick' ? '; rest day × 0.75 = '+fmt(carbRaw*0.75,1)+' → '+r5(carbRaw*0.75)+' g' : '');
+    const lines = [
+      'BMR (Mifflin-St Jeor, target '+fmt(wT,1)+' kg) = 10×'+fmt(wT,1)+' + 6.25×'+fmt(h,1)+' − 5×'+age+' '+sTxt+' = '+fmt(bmrT)+' kcal',
+      maintLine,
+      defTxt+' = '+fmt(tdee*(1-def))+' kcal'+(floored?' → held at current-weight BMR':'')+' → '+fmt(calR)+' kcal (floor: BMR at '+fmt(wC,1)+' kg = '+fmt(bmrC)+')',
+      'Protein = '+fmt(pk,1)+' × '+fmt(wT,1)+' kg = '+fmt(pk*wT,1)+' → '+pG+' g × 4 = '+pK+' kcal',
+      'Fat = '+fmt(fk,1)+' × '+fmt(wT,1)+' kg = '+fmt(fk*wT,1)+' → '+fG+' g × 9 = '+fK+' kcal (20% minimum = '+fmt(0.2*calR/9)+' g)',
+      carbLine
+    ];
+    $('how').innerHTML = lines.map(l=>'<li>'+l+'</li>').join('');
+  }
+
+  ['wc','wt','hcm','hft','hin','age','bf','act','appr','pk','fk'].forEach(id=>$(id).addEventListener('input',calc));
+  $('rest').addEventListener('change',()=>{
+    const on = $('rest').checked;
+    ACTS.filter(a=>a.id!=='walk').forEach(a=>{
+      const cb = $('on-'+a.id);
+      if (on){ cb.dataset.prev = cb.checked; cb.checked = false; }
+      else if (cb.dataset.prev !== undefined){ cb.checked = cb.dataset.prev==='true'; delete cb.dataset.prev; }
+      cb.disabled = on;
+    });
+    calc();
+  });
+  $('alist').addEventListener('input',calc);
+  $('alist').addEventListener('change',calc);
+  $('u-kg').onclick=()=>setUnit('kg'); $('u-lb').onclick=()=>setUnit('lb');
+  $('s-m').onclick=()=>{st.sex='m';setPressed(['s-m','s-f'],'s-m');calc();};
+  $('s-f').onclick=()=>{st.sex='f';setPressed(['s-m','s-f'],'s-f');calc();};
+  $('m-day').onclick=()=>setMode('day'); $('m-week').onclick=()=>setMode('week'); $('m-quick').onclick=()=>setMode('quick');
+  $('d-train').onclick=()=>{st.day='train';setPressed(['d-train','d-rest'],'d-train');calc();};
+  $('d-rest').onclick=()=>{st.day='rest';setPressed(['d-train','d-rest'],'d-rest');calc();};
+  setMode('day');
+})();
+</script>
+
+</body></html>
